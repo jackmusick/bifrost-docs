@@ -1,0 +1,19 @@
+{
+    "permissions": {
+        "allow": [
+            "Read(//Users/jack/GitHub/bifrost-client/public/docs/**)",
+            "Read(//Users/jack/GitHub/bifrost-api/**)",
+            "Read(//Users/jack/GitHub/bifrost-client/**)",
+            "Bash(for file in /Users/jack/GitHub/bifrost-docs/src/content/docs/reference/sdk/*.md)",
+            "Bash(do:*)",
+            "Bash(done)",
+            "Bash(/Users/jack/GitHub/bifrost-docs/src/content/docs/guides/workflows/writing-workflows.md )",
+            "Bash(/Users/jack/GitHub/bifrost-docs/src/content/docs/guides/workflows/using-decorators.md )",
+            "Bash(/Users/jack/GitHub/bifrost-docs/src/content/docs/guides/workflows/error-handling.md )",
+            "Bash(/Users/jack/GitHub/bifrost-docs/src/content/docs/concepts/workflows.md)",
+            "WebFetch(domain:hideoo.dev)"
+        ],
+        "deny": [],
+        "ask": []
+    }
+}

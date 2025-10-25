@@ -1,0 +1,9 @@
+{
+  "markdown.editor.filePaste.enabled": true,
+  "markdown.editor.filePaste.copyIntoWorkspace": "mediaFiles",
+  "markdown.copyFiles.destination": {
+    "/src/content/docs/**/*": "/src/assets/${documentBaseName}/"
+  },
+  "markdown.editor.drop.enabled": true,
+  "markdown.editor.drop.copyIntoWorkspace": "mediaFiles"
+}

@@ -1,40 +1,117 @@
 ---
-title: Welcome to Starlight
-description: Get started building your docs site with Starlight.
-template: splash # Remove or comment out this line to display the site sidebar on this page.
+title: Welcome to Bifrost
+description: Open-source workflow automation platform for MSPs and Integration Services
+template: splash
 hero:
-  tagline: Congrats on setting up a new Starlight project!
+  tagline: Build your rainbow bridge to enterprise automation
   image:
-    file: ../../assets/houston.webp
+    file: ../../assets/logo-darkmode.svg
   actions:
-    - text: Example Guide
-      link: /guides/example/
-      icon: right-arrow
-    - text: Read the Starlight docs
-      link: https://starlight.astro.build
-      icon: external
+    - text: Quick Start
+      link: /tutorials/quickstart/
+      icon: rocket
+    - text: View on GitHub
+      link: https://github.com/jackmusick/bifrost-api
+      icon: github
       variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Next steps
+## What is Bifrost?
+
+Bifrost is an open-source workflow automation platform designed for MSPs and Integration Services. It provides a powerful way to automate business processes, manage integrations, and create dynamic user interfaces—all without complex infrastructure.
+
+**Key features:**
+- Workflow automation with Python
+- Dynamic form generation with data providers
+- Built-in OAuth and secrets management
+- Multi-tenant support with organization isolation
+- Enterprise-grade security and audit logging
+- Seamless Azure integration
+
+---
+
+## Get Started
 
 <CardGrid stagger>
-	<Card title="Update content" icon="pencil">
-		Edit `src/content/docs/index.mdx` to see this page change.
+	<Card title="📘 Quick Start" icon="rocket">
+		Get up and running in 5 minutes with Docker. Create your first workflow and form.
+		[Start here](/tutorials/quickstart/)
 	</Card>
-	<Card title="Change page layout" icon="document">
-		Delete `template: splash` in `src/content/docs/index.mdx` to display a
-		sidebar on this page.
+	<Card title="🛠️ Build Your First Workflow" icon="laptop">
+		Learn the basics of workflow development. Create, deploy, and execute a workflow.
+		[Learn workflows](/tutorials/first-workflow/)
 	</Card>
-	<Card title="Add new content" icon="add-document">
-		Add Markdown or MDX files to `src/content/docs` to create new pages.
+	<Card title="📋 Create Dynamic Forms" icon="document">
+		Build powerful forms with data providers, visibility rules, and real-time data binding.
+		[Build forms](/tutorials/creating-forms/)
 	</Card>
-	<Card title="Configure your site" icon="setting">
-		Edit your `sidebar` and other config in `astro.config.mjs`.
-	</Card>
-	<Card title="Read the docs" icon="open-book">
-		Learn more in [the Starlight Docs](https://starlight.astro.build/).
+	<Card title="🔐 OAuth & Integrations" icon="shield">
+		Connect to external services like Microsoft Graph, HaloPSA, and custom APIs.
+		[Set up OAuth](/tutorials/oauth-integration/)
 	</Card>
 </CardGrid>
+
+---
+
+## Explore the Documentation
+
+<CardGrid>
+	<Card title="📚 Concepts" icon="open-book">
+		Understand the architecture, how the discovery system works, permissions model, and more.
+	</Card>
+	<Card title="📖 How-To Guides" icon="list">
+		Step-by-step guides for common tasks like writing workflows, creating forms, and deployment.
+	</Card>
+	<Card title="📚 Reference" icon="document">
+		Complete API reference, decorator documentation, context API, and type stubs.
+	</Card>
+	<Card title="🔧 Troubleshooting" icon="bug">
+		Solutions to common issues, debugging tips, and error reference.
+	</Card>
+</CardGrid>
+
+---
+
+## Key Resources
+
+### For Developers
+- [Workflow Development Guide](/guides/workflows/writing-workflows/) - Master workflow development
+- [Decorators & Discovery](/reference/sdk/decorators/) - Understand @workflow, @param, @data_provider
+- [Context API](/reference/sdk/context-api/) - Access organization data and state
+
+### For DevOps & Administrators
+- [Azure Deployment](/guides/deployment/azure-setup/) - Deploy to production on Azure
+- [Local Development](/guides/local-dev/setup/) - Set up your development environment
+- [Secrets Management](/guides/integrations/secrets-management/) - Secure credential storage
+
+### For System Architects
+- [Platform Architecture](/reference/architecture/overview/) - How Bifrost works internally
+- [Security Model](/reference/architecture/security/) - Authentication and authorization
+- [Multi-Tenancy](/reference/architecture/multi-tenancy/) - Organization isolation
+
+---
+
+## Community
+
+Bifrost is open-source and community-driven. Have questions or want to contribute?
+
+- **GitHub API**: [jackmusick/bifrost-api](https://github.com/jackmusick/bifrost-api)
+- **GitHub Client**: [jackmusick/bifrost-client](https://github.com/jackmusick/bifrost-client)
+- **Report Issues**: [Open an issue](https://github.com/jackmusick/bifrost-api/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/jackmusick/bifrost-api/discussions)
+
+---
+
+## Popular Topics
+
+**Just Starting Out?** → [Quick Start Guide](/tutorials/quickstart/)
+
+**Need to Deploy?** → [Azure Setup Guide](/guides/deployment/azure-setup/)
+
+**Building Complex Forms?** → [Form Field Types](/reference/forms/field-types/)
+
+**Integrating Services?** → [OAuth Setup](/guides/integrations/oauth-setup/)
+
+**Debugging Issues?** → [Troubleshooting Guide](/troubleshooting/azure-functions/)
