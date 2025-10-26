@@ -168,11 +168,7 @@ export default defineConfig({
                                 {
                                     label: "GitHub Actions",
                                     slug: "guides/deployment/github-actions",
-                                },
-                                {
-                                    label: "Environment Config",
-                                    slug: "guides/deployment/environment-config",
-                                },
+                                }
                             ],
                         },
                         {
