@@ -1,9 +1,12 @@
 {
-  "markdown.editor.filePaste.enabled": "smart",
-  "markdown.editor.filePaste.copyIntoWorkspace": "mediaFiles",
-  "markdown.copyFiles.destination": {
-    "src/content/docs/**/*.md": "/src/assets/${documentBaseName}/"
-  },
-  "markdown.editor.drop.enabled": "smart",
-  "markdown.editor.drop.copyIntoWorkspace": "mediaFiles"
+    "markdown.editor.filePaste.enabled": "smart",
+    "markdown.editor.filePaste.copyIntoWorkspace": "mediaFiles",
+    "files.associations": {
+        "*.mdx": "markdown"
+    },
+    "markdown.copyFiles.destination": {
+        "src/content/docs/**/*.{md,mdx}": "/src/assets/${documentBaseName}/"
+    },
+    "markdown.editor.drop.enabled": "smart",
+    "markdown.editor.drop.copyIntoWorkspace": "mediaFiles"
 }
