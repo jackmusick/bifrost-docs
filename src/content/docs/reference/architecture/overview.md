@@ -53,26 +53,26 @@ Bifrost consists of three main layers:
 
 ### Backend
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Runtime** | Azure Functions v2 | Serverless function execution |
-| **Language** | Python 3.11 | Workflow code execution |
-| **Framework** | Azure Functions SDK | HTTP/Queue/Timer handlers |
-| **Data Models** | Pydantic | Data validation and serialization |
-| **Storage** | Azure Tables | Organization, user, workflow metadata |
-| **File Storage** | Azure Files | Workflow workspace (`/workspace`, `/tmp`) |
-| **Secrets** | Azure Key Vault | OAuth tokens, API keys |
-| **Monitoring** | Application Insights | Logging and diagnostics |
+| Component        | Technology           | Purpose                                   |
+| ---------------- | -------------------- | ----------------------------------------- |
+| **Runtime**      | Azure Functions v2   | Serverless function execution             |
+| **Language**     | Python 3.11          | Workflow code execution                   |
+| **Framework**    | Azure Functions SDK  | HTTP/Queue/Timer handlers                 |
+| **Data Models**  | Pydantic             | Data validation and serialization         |
+| **Storage**      | Azure Tables         | Organization, user, workflow metadata     |
+| **File Storage** | Azure Files          | Workflow workspace (`/workspace`, `/tmp`) |
+| **Secrets**      | Azure Key Vault      | OAuth tokens, API keys                    |
+| **Monitoring**   | Application Insights | Logging and diagnostics                   |
 
 ### Frontend
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Framework** | React 18 | UI component library |
-| **Language** | TypeScript | Type-safe frontend code |
-| **Hosting** | Azure Static Web App | CDN-distributed static content |
-| **Styling** | Tailwind CSS | Utility-first CSS |
-| **State** | Zustand | Client-side state management |
+| Component     | Technology           | Purpose                        |
+| ------------- | -------------------- | ------------------------------ |
+| **Framework** | React 18             | UI component library           |
+| **Language**  | TypeScript           | Type-safe frontend code        |
+| **Hosting**   | Azure Static Web App | CDN-distributed static content |
+| **Styling**   | Tailwind CSS         | Utility-first CSS              |
+| **State**     | Zustand              | Client-side state management   |
 
 ## Component Architecture
 
@@ -353,15 +353,15 @@ Configuration in `host.json`:
 
 ```json
 {
-    "functionTimeout": "00:05:00",
-    "maxCurrentRequests": 200,
-    "healthMonitor": {
-        "enabled": true,
-        "healthCheckInterval": "00:00:10",
-        "healthCheckWindow": "00:01:00",
-        "healthCheckThreshold": 6,
-        "counterThreshold": 0.80
-    }
+  "functionTimeout": "00:05:00",
+  "maxCurrentRequests": 200,
+  "healthMonitor": {
+    "enabled": true,
+    "healthCheckInterval": "00:00:10",
+    "healthCheckWindow": "00:01:00",
+    "healthCheckThreshold": 6,
+    "counterThreshold": 0.8
+  }
 }
 ```
 
@@ -409,26 +409,31 @@ Configuration in `host.json`:
 ## Key Architectural Principles
 
 1. **Separation of Concerns**
+
    - Functions are thin HTTP handlers
    - Business logic in `shared/handlers/`
    - Data access in `shared/repositories/`
 
 2. **Type Safety**
+
    - Pydantic models for all data
    - Type hints on all functions
    - Validation on inputs/outputs
 
 3. **Testability**
+
    - Mock-friendly repository pattern
    - Unit tests with mocked storage
    - Integration tests with Azurite
 
 4. **Security**
+
    - Zero trust - validate everything
    - Workspace isolation with import restrictions
    - Secrets in Key Vault, never in code
 
 5. **Scalability**
+
    - Stateless functions
    - Asynchronous patterns
    - Queue-based background jobs
@@ -445,7 +450,3 @@ Configuration in `host.json`:
 - [Multi-Tenancy Architecture](./multi-tenancy.md) - Organization isolation details
 - [Security Model](/reference/architecture/security/) - Authentication and authorization
 - [SDK Documentation](/reference/sdk/) - Public API reference
-
----
-
-**For infrastructure deployment**, see [Deploy to Azure](/guides/deployment/azure-setup/).

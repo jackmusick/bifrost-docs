@@ -1,9 +1,18 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightThemeBlack from "starlight-theme-black";
 
 // https://astro.build/config
 export default defineConfig({
+    vite: {
+          server: {
+              watch: {
+                  usePolling: true,
+                  interval: 1000, // Check every 100ms
+              },
+          },
+    },
     integrations: [
         starlight({
             title: "Bifrost Docs",
@@ -26,14 +35,14 @@ export default defineConfig({
                 },
             ],
             customCss: ["./src/styles/custom.css"],
-            expressiveCode: {
-                themes: ["dark-plus"],
-            },
             sidebar: [
                 {
                     label: "Getting Started",
                     items: [
-                        { label: "Quick Start", slug: "tutorials/quickstart" },
+                        {
+                            label: "Installation Guide",
+                            slug: "guides/installation",
+                        },
                         {
                             label: "Build Your First Workflow",
                             slug: "tutorials/first-workflow",
@@ -158,20 +167,6 @@ export default defineConfig({
                             ],
                         },
                         {
-                            label: "Deployment",
-                            collapsed: true,
-                            items: [
-                                {
-                                    label: "Azure Setup",
-                                    slug: "guides/deployment/azure-setup",
-                                },
-                                {
-                                    label: "GitHub Actions",
-                                    slug: "guides/deployment/github-actions",
-                                }
-                            ],
-                        },
-                        {
                             label: "User Interface",
                             collapsed: true,
                             items: [
@@ -261,6 +256,20 @@ export default defineConfig({
             components: {
                 // Override default components if needed
             },
+            plugins: [
+                starlightThemeBlack({
+                    navLinks: [
+                        {
+                            label: "GitHub API",
+                            link: "https://github.com/jackmusick/bifrost-api",
+                        },
+                        {
+                            label: "GitHub Client",
+                            link: "https://github.com/jackmusick/bifrost-client",
+                        },
+                    ],
+                }),
+            ],
         }),
     ],
 });

@@ -1,0 +1,140 @@
+---
+title: Installation
+description: Complete guide for deploying Bifrost to Azure infrastructure using ARM templates and Azure CLI
+---
+
+import { Steps, Aside } from "@astrojs/starlight/components";
+
+## Prerequisites
+
+Before deploying to Azure, you need an active Azure Subscription.
+
+### Required Permissions
+
+Your Azure account needs these permissions:
+
+- Create resource groups
+- Create storage accounts
+- Create function apps
+- Create key vaults
+- Create application insights
+- Create static web apps
+
+## Overview
+
+The ARM template creates the following Azure resources:
+
+- **Azure Functions (Flex Consumption Plan)** - Serverless backend runtime
+- **Storage Account (Standard_LRS)** - Tables and file storage
+- **Azure Key Vault** - Secure secrets management
+- **Application Insights** - Performance monitoring and diagnostics
+- **Static Web App** - React frontend hosting
+
+## Infrastructure Setup
+
+### Entra App Registration
+
+<Steps>
+
+1. Login to [Entra](https://entra.microsoft.com).
+
+2. Navigate to App Registrations.
+
+3. Click **New Registration**.
+
+   - For the name, put whatever you want like `Bifrost Integrations` or `MyMSP Automation`.
+   - For the account types, select Multitenant unless you do _NOT_ have customers or partners that need to login and run forms.
+   - For the Redirect URI, select **Web** as the platform and type in the URL you intend to use for the application. This can be changed later. Example:
+
+     `https://bifrost.mydomain.com/.auth/login/aad/callback`
+
+     ![alt text](../../../assets/installation/image-9.png)
+
+4. Under **Overview**, copy your Application ID. You'll need this later.
+
+5. Under **Certificates & Secrets**, create a new client secret and copy this to your password manager along with the Client ID. You'll need this later.
+
+6. Under **Authentication**, enable ID tokens.
+
+   ![alt text](../../../assets/installation/image-8.png)
+
+7. Under API Permissions, grant admin consent.
+
+   ![alt text](../../../assets/installation/image-7.png)
+
+</Steps>
+
+### Azure Subscription
+
+<Steps>
+
+1. Open up the Cloud Terminal.
+
+2. Enter this command:
+
+   ```bash
+   az provider register --namespace Microsoft.OperationalInsights
+   ```
+
+   ![alt text](../../../assets/installation/image-11.png)
+
+</Steps>
+
+## Deployment
+
+Because we're using Azure Functions Flex Consumption plans, there's only one way to deploy the application.
+
+<Steps>
+
+1. Fork the [API](https://github.com/jackmusick/bifrost-api) and [Client](https://github.com/jackmusick/bifrost-client) repository.
+
+   ![alt text](../../../assets/installation/image-5.png)
+
+2. Create your [GitHub Personal Access Token](https://learn.microsoft.com/en-us/azure/static-web-apps/publish-azure-resource-manager?tabs=azure-cli#create-a-github-personal-access-token) and save it to your password manager.
+
+   ![alt text](../../../assets/installation/image-4.png)
+
+3. Use the below Deploy to Azure button to automatically setup all of your resources. Azure will ask you for the Entra ID Client ID and Secret you created above.
+
+   <Aside type="caution">
+     Set a reminder to renew your Client Secret and update it on the Static Web
+     App's configuration page.
+   </Aside>
+
+   <br />
+
+   <a
+     href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjackmusick%2Fbifrost-api%2Frefs%2Fheads%2Fmain%2Fdeployment%2Fazuredeploy.json"
+     target="_blank"
+   >
+     <img src="https://aka.ms/deploytoazurebutton" />
+   </a>
+
+   <br />
+
+4. Go to Azure Function App in Azure. On the **Overview** page, click **Get Publish Profile**.
+
+   ![alt text](../../../assets/installation/image-13.png)
+
+   Copy the contents of the downloaded XML content to your clipboard.
+
+5. Go to your Bifrost API repository in GitHub → Settings → Secrets and variables → Actions.
+
+6. Click **New repository secret**.
+
+   ![alt text](../../../assets/installation/image-14.png)
+
+7. Add these secrets:
+
+   | Name                                | Value               | Description                        |
+   | ----------------------------------- | ------------------- | ---------------------------------- |
+   | `AZURE_FUNCTIONAPP_NAME`            | `bifrost-api-xxxxx` | Your Function App name             |
+   | `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` | XML from step 1     | Publish profile for authentication |
+
+   This should immediately begin deploying your Azure Function app. You can view this under **Actions**.
+
+8. Add a custom domain to your Static Web App. This should match the domain you selected for your App Registration. If it doesn't, you'll need to update it on the App Registration before you login.
+
+   ![alt text](../../../assets/installation/image-12.png)
+
+</Steps>

@@ -147,13 +147,13 @@ workspace_path = "/workspace"  # Actually org-abc123/
 
 Bifrost uses **organization-based partitioning** across all storage:
 
-| Entity Type | Partition Key | Row Key | Purpose |
-|------------|---------------|---------|---------|
-| **Organization** | `org-{id}` | `config` | Org metadata |
-| **User** | `org-{id}` | `user-{user_id}` | User records |
-| **Execution** | `org-{id}` | `exec-{execution_id}` | Execution results |
-| **Config** | `org-{id}` | `config-{key}` | Org settings |
-| **OAuth** | `org-{id}` | `oauth-{provider}` | OAuth tokens |
+| Entity Type      | Partition Key | Row Key               | Purpose           |
+| ---------------- | ------------- | --------------------- | ----------------- |
+| **Organization** | `org-{id}`    | `config`              | Org metadata      |
+| **User**         | `org-{id}`    | `user-{user_id}`      | User records      |
+| **Execution**    | `org-{id}`    | `exec-{execution_id}` | Execution results |
+| **Config**       | `org-{id}`    | `config-{key}`        | Org settings      |
+| **OAuth**        | `org-{id}`    | `oauth-{provider}`    | OAuth tokens      |
 
 ### Query Patterns
 
@@ -261,19 +261,19 @@ class OrganizationConfig(BaseModel):
 
 ```json
 {
-    "id": "org-abc123",
-    "name": "Acme Corp",
-    "settings": {
-        "workflow_timeout_seconds": 300,
-        "max_concurrent_executions": 10,
-        "enable_oauth_auto_refresh": true,
-        "custom_domain": "api.acmecorp.io"
-    },
-    "roles": [
-        {"name": "admin", "permissions": ["*"]},
-        {"name": "user", "permissions": ["workflows:read", "workflows:execute"]},
-        {"name": "viewer", "permissions": ["workflows:read"]}
-    ]
+  "id": "org-abc123",
+  "name": "Acme Corp",
+  "settings": {
+    "workflow_timeout_seconds": 300,
+    "max_concurrent_executions": 10,
+    "enable_oauth_auto_refresh": true,
+    "custom_domain": "api.acmecorp.io"
+  },
+  "roles": [
+    { "name": "admin", "permissions": ["*"] },
+    { "name": "user", "permissions": ["workflows:read", "workflows:execute"] },
+    { "name": "viewer", "permissions": ["workflows:read"] }
+  ]
 }
 ```
 
@@ -343,13 +343,13 @@ Each organization can have custom API keys:
 
 ```json
 {
-    "org-abc123": {
-        "external_api_keys": {
-            "zendesk": "abc123...",
-            "slack": "xoxb-...",
-            "stripe": "sk_live_..."
-        }
+  "org-abc123": {
+    "external_api_keys": {
+      "zendesk": "abc123...",
+      "slack": "xoxb-...",
+      "stripe": "sk_live_..."
     }
+  }
 }
 ```
 
@@ -374,15 +374,15 @@ Organizations have configurable quotas:
 
 ```json
 {
-    "org-abc123": {
-        "quotas": {
-            "workflows": 100,
-            "workspace_quota_gb": 100,
-            "tmp_quota_gb": 50,
-            "concurrent_executions": 10,
-            "api_calls_per_minute": 1000
-        }
+  "org-abc123": {
+    "quotas": {
+      "workflows": 100,
+      "workspace_quota_gb": 100,
+      "tmp_quota_gb": 50,
+      "concurrent_executions": 10,
+      "api_calls_per_minute": 1000
     }
+  }
 }
 ```
 
@@ -496,16 +496,19 @@ As organizations grow, the platform automatically handles:
 ### Organization Count Scaling
 
 **Small scale (1-100 orgs):**
+
 - Single Azure Functions instance
 - Single Azure Tables account
 - Shared Key Vault
 
 **Medium scale (100-1000 orgs):**
+
 - Auto-scaling Azure Functions (10+ instances)
 - Single Azure Tables account (handles easily)
 - Shared Key Vault with appropriate access policies
 
 **Large scale (1000+ orgs):**
+
 - Multi-region Azure Functions
 - Azure Tables with geo-replication
 - Multi-region Key Vault or separate vaults per region
@@ -515,11 +518,13 @@ As organizations grow, the platform automatically handles:
 Multi-tenancy reduces per-organization costs:
 
 **Single-tenant model:**
+
 - Function App per org: $5/month × 1000 orgs = $5,000/month
 - Storage per org: $2/month × 1000 orgs = $2,000/month
 - **Total: $7,000+/month**
 
 **Multi-tenant model:**
+
 - Shared Function App: $50/month (multiple instances)
 - Shared Storage: $5/month (scales to thousands of orgs)
 - **Total: $55/month** for same scale
@@ -527,12 +532,14 @@ Multi-tenancy reduces per-organization costs:
 ## Best Practices
 
 1. **Always require org_id in headers**
+
    ```bash
    # Must include in every API call
    -H "X-Organization-Id: org-abc123"
    ```
 
 2. **Never hardcode organization data**
+
    ```python
    # Bad: assumes org
    ORG_ID = "org-abc123"
@@ -542,12 +549,14 @@ Multi-tenancy reduces per-organization costs:
    ```
 
 3. **Scope all data access**
+
    ```python
    # Every query filters by org_id
    users = await repo.list(org_id=org_id)
    ```
 
 4. **Audit sensitive operations**
+
    ```python
    # Log when org data is accessed or modified
    logger.info(f"Accessed config for {org_id}")
@@ -564,7 +573,6 @@ Multi-tenancy reduces per-organization costs:
 
 - [Platform Architecture](./overview.md) - System design overview
 - [Security Model](/reference/architecture/security/) - Authentication and authorization
-- [Deploy to Azure](/guides/deployment/azure-setup/) - Production deployment
 
 ---
 

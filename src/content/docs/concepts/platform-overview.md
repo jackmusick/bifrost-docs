@@ -148,11 +148,13 @@ Bifrost implements:
 ## Deployment Options
 
 ### Local Development
+
 - Docker Compose with Azurite (storage emulator)
 - Remote debugging via debugpy
 - Hot reload for code changes
 
 ### Production
+
 - Azure Container Instances or App Service
 - Azure Storage for data persistence
 - Azure Key Vault for secrets
@@ -162,6 +164,7 @@ Bifrost implements:
 ## Key Features
 
 ### Workflow Development
+
 - Python async functions with decorators
 - Parameter validation
 - Error handling with custom exceptions
@@ -170,6 +173,7 @@ Bifrost implements:
 - Timeout and retry policies
 
 ### Form Building
+
 - Multiple field types (text, select, date, file upload, etc.)
 - Data provider integration
 - Visibility rules with expressions
@@ -178,6 +182,7 @@ Bifrost implements:
 - Rich HTML rendering
 
 ### Integrations
+
 - Microsoft Graph API (users, groups, mail)
 - HaloPSA (tickets, clients)
 - OAuth 2.0 for any service
@@ -185,6 +190,7 @@ Bifrost implements:
 - Automatic token refresh
 
 ### Operations
+
 - Workflow execution history
 - Real-time execution logs
 - Performance metrics
@@ -195,6 +201,7 @@ Bifrost implements:
 ## Use Cases
 
 ### MSP/IT Service Providers
+
 - User onboarding/offboarding automation
 - License management and allocation
 - Ticket creation and management
@@ -202,6 +209,7 @@ Bifrost implements:
 - Compliance reporting
 
 ### Enterprise IT
+
 - User provisioning in multiple systems
 - Bulk operations via forms
 - Self-service capabilities
@@ -209,6 +217,7 @@ Bifrost implements:
 - Workflow orchestration
 
 ### Integration Services
+
 - Data synchronization between systems
 - Event-driven workflows
 - API orchestration
@@ -216,10 +225,9 @@ Bifrost implements:
 
 ## Getting Started
 
-1. **Quick Start**: [5-minute setup guide](/tutorials/quickstart/) with Docker
-2. **First Workflow**: [Build your first workflow](/tutorials/first-workflow/)
-3. **Forms**: [Create dynamic forms](/tutorials/creating-forms/)
-4. **Deployment**: [Deploy to Azure](/guides/deployment/azure-setup/)
+1. **Installation**: [Deploy to Azure](/guides/installation)
+1. **First Workflow**: [Build your first workflow](/tutorials/first-workflow/)
+1. **Forms**: [Create dynamic forms](/tutorials/creating-forms/)
 
 ## Open Source
 

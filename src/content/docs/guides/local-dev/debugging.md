@@ -63,15 +63,15 @@ The `.devcontainer/devcontainer.json` includes VS Code extensions and settings:
 
 ```json
 {
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "ms-python.python",
-                "ms-python.vscode-pylance",
-                "ms-azuretools.vscode-azurefunctions"
-            ]
-        }
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-azurefunctions"
+      ]
     }
+  }
 }
 ```
 
@@ -83,25 +83,25 @@ If not using dev container, create `.vscode/launch.json`:
 
 ```json
 {
-    "version": "0.2.0",
-    "configurations": [
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach to Azure Functions",
+      "type": "python",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      },
+      "pathMappings": [
         {
-            "name": "Attach to Azure Functions",
-            "type": "python",
-            "request": "attach",
-            "connect": {
-                "host": "localhost",
-                "port": 5678
-            },
-            "pathMappings": [
-                {
-                    "localRoot": "${workspaceFolder}",
-                    "remoteRoot": "/workspace"
-                }
-            ],
-            "justMyCode": true
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "/workspace"
         }
-    ]
+      ],
+      "justMyCode": true
+    }
+  ]
 }
 ```
 
@@ -122,13 +122,13 @@ If not using dev container, create `.vscode/launch.json`:
 
 Once stopped at a breakpoint:
 
-| Key | Action |
-|-----|--------|
-| **F10** | Step over (next line in current function) |
-| **F11** | Step into (enter called functions) |
-| **Shift+F11** | Step out (exit current function) |
-| **F5** | Continue execution |
-| **Ctrl+Shift+D** | Open Debug view |
+| Key              | Action                                    |
+| ---------------- | ----------------------------------------- |
+| **F10**          | Step over (next line in current function) |
+| **F11**          | Step into (enter called functions)        |
+| **Shift+F11**    | Step out (exit current function)          |
+| **F5**           | Continue execution                        |
+| **Ctrl+Shift+D** | Open Debug view                           |
 
 ### Inspecting Variables
 
@@ -291,6 +291,7 @@ WorkflowNotFound: Workflow hello_world not found
 ```
 
 This tells you:
+
 1. The exception type (`WorkflowNotFound`)
 2. Where it occurred (file and line number)
 3. The chain of function calls that led to it
@@ -321,6 +322,7 @@ async def my_endpoint(req: func.HttpRequest) -> func.HttpResponse:
 **Symptom:** `WorkflowNotFound: Workflow hello_world not found`
 
 **Debugging steps:**
+
 ```bash
 # 1. Check if workflow file exists
 ls workspace/examples/hello_world.py
@@ -343,6 +345,7 @@ logger.debug(f"Discovered workflows: {self.get_workflow_list()}")
 **Symptom:** `401 Unauthorized` or missing org ID
 
 **Debugging steps:**
+
 ```bash
 # Check headers are being sent
 curl -v -X POST \
@@ -362,6 +365,7 @@ print(f"Org ID: {req.headers.get('X-Organization-Id')}")
 **Symptom:** `Connection refused` or tables not found
 
 **Debugging steps:**
+
 ```bash
 # 1. Verify Azurite is running
 curl http://localhost:10000/devstoreaccount1 && echo "OK"
@@ -386,6 +390,7 @@ logger.debug(f"Connection string: {conn_str}")
 **Symptom:** `RuntimeError: Event loop is closed` or hung execution
 
 **Debugging steps:**
+
 ```python
 # Ensure all async calls use await
 async def my_handler():
@@ -464,6 +469,7 @@ python -m cProfile -s cumulative -m pytest tests/integration/test_slow.py
 **Issue:** "Failed to attach to port 5678"
 
 **Solution:**
+
 ```bash
 # 1. Verify Functions runtime started
 curl http://localhost:7071/api/health
@@ -483,6 +489,7 @@ func start
 **Issue:** Import errors when debugging
 
 **Solution:**
+
 ```bash
 # 1. Verify imports are correct
 python -c "from shared.models import Organization"
@@ -498,6 +505,7 @@ echo $PYTHONPATH
 **Issue:** Code runs past breakpoint without stopping
 
 **Solution:**
+
 ```python
 # 1. Verify breakpoint is set (red dot visible)
 # Click in left margin to set breakpoint
@@ -514,6 +522,7 @@ import sys; sys.exit(1)  # Will immediately fail and show traceback
 **Issue:** `func start` crashes or exits unexpectedly
 
 **Solution:**
+
 ```bash
 # 1. Check the full error output
 func start 2>&1 | head -50
@@ -540,7 +549,6 @@ pip install -r requirements.txt
 ## Next Steps
 
 - **Test your changes:** See [Test Workflows Locally](./testing.md)
-- **Deploy to Azure:** See [Deploy to Azure](/guides/deployment/azure-setup/)
 - **Read error reference:** See [Troubleshooting](/troubleshooting/)
 
 ---

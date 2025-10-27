@@ -111,17 +111,17 @@ from bifrost import workflow, context
 @workflow(name="scope_example")
 async def scope_example(ctx: context.WorkflowContext):
     """Show how scope resolution works."""
-    
+
     # Get config with fallback: org → global
     # First tries ACME's config
     # If not found, tries GLOBAL config
     smtp = ctx.get_config("smtp_server")
-    
+
     # Get OAuth connection with fallback: org → global
     # First tries ACME's "microsoft-graph"
     # If not found, tries GLOBAL "microsoft-graph"
     oauth = await ctx.get_oauth_connection("microsoft-graph")
-    
+
     # Get secret with org scope only
     # Only ACME's secrets, not global
     api_key = await ctx.get_secret("api_key")
@@ -134,10 +134,10 @@ When accessing a resource, Bifrost checks in order:
 ```
 1. Organization-specific
    └─ Is there an org-level version?
-      
+
 2. Global fallback
    └─ If not found in org, check global
-      
+
 3. Error
    └─ If not found in either, error
 ```
@@ -164,6 +164,7 @@ oauth = await ctx.get_oauth_connection("microsoft-graph")
 ### Use Global Scope When
 
 1. **Shared Infrastructure**
+
    ```
    OAuth Connection: Vendor's API
    Scope: GLOBAL
@@ -171,6 +172,7 @@ oauth = await ctx.get_oauth_connection("microsoft-graph")
    ```
 
 2. **Platform Standards**
+
    ```
    Config: SMTP server, logging level, timezone
    Scope: GLOBAL
@@ -187,6 +189,7 @@ oauth = await ctx.get_oauth_connection("microsoft-graph")
 ### Use Organization Scope When
 
 1. **Customer-Specific Integrations**
+
    ```
    OAuth Connection: Customer's Microsoft Graph
    Scope: Organization
@@ -194,6 +197,7 @@ oauth = await ctx.get_oauth_connection("microsoft-graph")
    ```
 
 2. **Tenant-Specific Configuration**
+
    ```
    Config: Customer's timezone, department names
    Scope: Organization
@@ -241,11 +245,11 @@ async def sync_crm_data(ctx):
     # For ACME Corp execution:
     crm_key = await ctx.get_secret("acme_api_key")
     timezone = ctx.get_config("acme_timezone")
-    
+
     # For TechCorp execution:
     crm_key = await ctx.get_secret("techcorp_api_key")
     timezone = ctx.get_config("techcorp_timezone")
-    
+
     # Each organization uses its own secrets/config!
 ```
 
@@ -271,13 +275,13 @@ Forms can use scoped data:
 @data_provider(name="get_departments")
 async def get_departments(ctx: context.WorkflowContext):
     """Get departments for this organization."""
-    
+
     # Automatically uses org context
     org_id = ctx.org_id
-    
+
     # Gets org-specific departments
     departments = await ctx.get_config("org.departments")
-    
+
     return [
         {"label": dept, "value": dept}
         for dept in departments
@@ -371,7 +375,7 @@ ORG_CONFIG: "office_location"  # specific to this org
 async def sync_data(ctx):
     """
     Sync data with CRM.
-    
+
     Uses:
     - Organization OAuth "crm_oauth" (org-specific)
     - Global config "crm_base_url" (shared platform config)
@@ -394,6 +398,7 @@ async def sync_data(ctx):
 ### "Secret Not Found"
 
 Check:
+
 1. Is secret name correct?
 2. Is secret at right scope?
    - Organization level? (check org-prefixed name)
@@ -403,6 +408,7 @@ Check:
 ### "Cannot Access Other Organization's Data"
 
 This is correct behavior:
+
 - Organization isolation is working properly
 - You can only access your org's data
 - Ask OrgAdmin to add you to other org if needed
@@ -410,12 +416,12 @@ This is correct behavior:
 ### Global Config Not Applied
 
 Check:
+
 1. Organization has its own config (overrides global)
 2. Delete org config to use global fallback
 3. Verify global config exists
 
 ## Reference
 
-- [Getting Started](/tutorials/quickstart) - Basic scope concepts
 - [Platform Overview](/guides/platform-overview) - Multi-tenant architecture
 - [Security Model](/reference/architecture/security) - Isolation guarantees
