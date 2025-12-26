@@ -1,0 +1,162 @@
+---
+title: Config Module
+description: SDK reference for configuration management
+---
+
+The `config` module provides organization-scoped configuration storage with secret encryption.
+
+## Import
+
+```python
+from bifrost import config
+```
+
+## Methods
+
+### config.get()
+
+Get a configuration value.
+
+```python
+async def get(
+    key: str,
+    org_id: str | None = None,
+    default: Any = None,
+) -> Any
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | str | Configuration key |
+| `org_id` | str | Organization ID (auto-set in workflows) |
+| `default` | Any | Default if key doesn't exist |
+
+#### Returns
+
+The configuration value, or `default` if not found. Secrets are automatically decrypted.
+
+#### Example
+
+```python
+api_key = await config.get("external_api_key")
+timeout = await config.get("request_timeout", default=30)
+```
+
+### config.set()
+
+Set a configuration value.
+
+```python
+async def set(
+    key: str,
+    value: Any,
+    org_id: str | None = None,
+    is_secret: bool = False,
+) -> None
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | str | Configuration key |
+| `value` | Any | Value to store |
+| `org_id` | str | Organization ID |
+| `is_secret` | bool | Encrypt the value |
+
+#### Example
+
+```python
+# Regular value
+await config.set("max_retries", 3)
+
+# Secret value (encrypted at rest)
+await config.set("api_secret", "sk-xxx", is_secret=True)
+```
+
+### config.list()
+
+List all configuration values.
+
+```python
+async def list(
+    org_id: str | None = None
+) -> ConfigData
+```
+
+#### Returns
+
+`ConfigData` object with flexible access patterns.
+
+#### Example
+
+```python
+cfg = await config.list()
+
+# Dot notation
+print(cfg.api_url)
+
+# Dict access
+print(cfg["api_url"])
+
+# Check existence
+if "api_key" in cfg:
+    print("API key configured")
+
+# Iterate keys
+for key in cfg.keys():
+    print(key)
+```
+
+### config.delete()
+
+Delete a configuration value.
+
+```python
+async def delete(
+    key: str,
+    org_id: str | None = None
+) -> bool
+```
+
+#### Example
+
+```python
+deleted = await config.delete("old_setting")
+```
+
+## Types
+
+### ConfigData
+
+A dict-like container with multiple access patterns:
+
+```python
+class ConfigData(BaseModel):
+    data: dict[str, Any]
+
+    # Supports:
+    # - cfg.key (dot notation)
+    # - cfg["key"] (dict access)
+    # - "key" in cfg (membership)
+    # - cfg.keys() (iteration)
+```
+
+## Secrets
+
+Values stored with `is_secret=True`:
+- Are encrypted at rest in the database
+- Are automatically decrypted when retrieved via `config.get()`
+- Are masked in logs and UI displays
+
+## Organization Scoping
+
+All config operations are scoped to an organization:
+- In workflows, `org_id` is automatically set from execution context
+- For CLI/local development, specify `org_id` explicitly or use default from credentials
+
+## See Also
+
+- [Secrets Management](/how-to-guides/integrations/secrets-management) - Security guide

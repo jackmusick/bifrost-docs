@@ -1,0 +1,183 @@
+---
+title: Agents and Chat
+description: Conversational AI with tool-calling workflows
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Create AI agents that can use your workflows as tools and hold conversations.
+
+## Overview
+
+Agents combine:
+- A system prompt defining personality/behavior
+- Access to workflows as callable tools
+- Optional knowledge sources for RAG
+- Conversation history management
+
+## Creating an Agent
+
+<Steps>
+
+1. Navigate to **Agents** in the sidebar
+
+2. Click **Create Agent**
+
+3. Configure:
+   - **Name**: Display name for the agent
+   - **System Prompt**: Instructions for the AI
+   - **Access Level**: Public, Authenticated, or Role-based
+
+4. Assign tools (workflows) the agent can call
+
+5. Optionally add knowledge sources
+
+</Steps>
+
+## Agent Access Levels
+
+| Level | Description |
+|-------|-------------|
+| **Public** | Anyone can chat (no auth required) |
+| **Authenticated** | Logged-in users only |
+| **Role-based** | Users with assigned roles only |
+
+## Adding Tools
+
+Mark workflows as tools to make them callable by agents:
+
+```python
+from bifrost import workflow
+
+@workflow(
+    is_tool=True,
+    tool_description="Look up a customer by email address"
+)
+async def lookup_customer(email: str):
+    # ... lookup logic
+    return {"name": "John Doe", "account": "12345"}
+```
+
+The `tool_description` helps the agent understand when to use the tool.
+
+## Knowledge Sources
+
+Attach knowledge namespaces for RAG:
+
+1. In agent settings, add **Knowledge Sources**
+2. Select namespaces (e.g., "faq", "docs")
+3. Agent automatically searches these when answering
+
+## Chat API
+
+Start conversations programmatically:
+
+### Create Conversation
+
+```python
+import requests
+
+response = requests.post(
+    f"{api_url}/api/chat/conversations",
+    json={"agent_id": "agent-123"},  # Optional
+    headers={"Authorization": f"Bearer {token}"}
+)
+conversation_id = response.json()["id"]
+```
+
+### Send Message
+
+```python
+response = requests.post(
+    f"{api_url}/api/chat/conversations/{conversation_id}/messages",
+    json={"content": "Hello, I need help with my account."},
+    headers={"Authorization": f"Bearer {token}"}
+)
+```
+
+### WebSocket Streaming
+
+For real-time streaming responses:
+
+```javascript
+const ws = new WebSocket(
+    `wss://your-instance.com/api/chat/conversations/${conversationId}/stream`
+);
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "delta") {
+        console.log(data.content);
+    }
+};
+
+ws.send(JSON.stringify({ content: "How do I reset my password?" }));
+```
+
+## @Mentions
+
+Switch agents mid-conversation using @mentions:
+
+```
+User: @support-agent I need help with billing
+AI: (responds as support-agent)
+
+User: @tech-agent Can you check my server status?
+AI: (switches to tech-agent)
+```
+
+## Agent Delegation
+
+Agents can delegate to other agents:
+
+1. In agent settings, add **Delegations**
+2. Select agents this one can hand off to
+3. The AI decides when to delegate based on context
+
+<Aside type="tip">
+Delegation is useful for specialized agents - a general triage agent can delegate to billing, tech support, or sales agents.
+</Aside>
+
+## Agentless Chat
+
+Chat without a specific agent uses default routing:
+
+```python
+response = requests.post(
+    f"{api_url}/api/chat/conversations",
+    json={},  # No agent_id
+    headers={"Authorization": f"Bearer {token}"}
+)
+```
+
+The system uses AI-based routing to select an appropriate agent or responds with a default system prompt.
+
+## Example: Support Agent
+
+```python
+from bifrost import workflow
+
+@workflow(
+    is_tool=True,
+    tool_description="Look up a support ticket by ID"
+)
+async def get_ticket(ticket_id: str):
+    # Fetch ticket from your system
+    return {"id": ticket_id, "status": "open", "subject": "..."}
+
+@workflow(
+    is_tool=True,
+    tool_description="Update the status of a support ticket"
+)
+async def update_ticket(ticket_id: str, status: str, note: str = ""):
+    # Update ticket
+    return {"success": True}
+```
+
+Create an agent with these tools and a prompt like:
+> "You are a helpful support agent. Use the tools to look up and update tickets. Always confirm before making changes."
+
+## Next Steps
+
+- [Using AI in Workflows](/how-to-guides/ai/using-ai-in-workflows) - Direct AI completions
+- [Knowledge Bases](/how-to-guides/ai/knowledge-bases) - RAG setup

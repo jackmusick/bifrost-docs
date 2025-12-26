@@ -1,0 +1,139 @@
+---
+title: Integrations Module
+description: SDK reference for accessing integration configurations and OAuth tokens
+---
+
+The `integrations` module provides access to integration configurations and OAuth credentials.
+
+## Import
+
+```python
+from bifrost import integrations
+```
+
+## Methods
+
+### integrations.get()
+
+Get integration configuration with OAuth tokens.
+
+```python
+async def get(
+    name: str,
+    org_id: str | None = None,
+) -> IntegrationData | None
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | str | Integration name (e.g., "HaloPSA", "Microsoft_Graph") |
+| `org_id` | str | Organization ID (auto-set in workflows) |
+
+#### Returns
+
+`IntegrationData` object or `None` if not found.
+
+#### Example
+
+```python
+integration = await integrations.get("Microsoft_Graph")
+if integration:
+    # Access OAuth tokens
+    token = integration.oauth.access_token
+
+    # Access config values
+    tenant_id = integration.config.get("tenant_id")
+
+    # Entity ID for multi-tenant
+    entity = integration.entity_id
+```
+
+### integrations.list_mappings()
+
+List all organization mappings for an integration.
+
+```python
+async def list_mappings(
+    name: str
+) -> list[IntegrationMappingResponse] | None
+```
+
+#### Example
+
+```python
+mappings = await integrations.list_mappings("HaloPSA")
+for mapping in mappings:
+    print(f"Org: {mapping.organization_id}, Entity: {mapping.entity_id}")
+```
+
+## Types
+
+### IntegrationData
+
+```python
+class IntegrationData(BaseModel):
+    integration_id: str
+    entity_id: str | None        # External entity ID (tenant, company, etc.)
+    entity_name: str | None      # Display name for entity
+    config: dict                  # Merged configuration (defaults + org overrides)
+    oauth: OAuthCredentials | None
+```
+
+### OAuthCredentials
+
+```python
+class OAuthCredentials(BaseModel):
+    connection_name: str
+    client_id: str | None
+    client_secret: str | None     # Decrypted
+    authorization_url: str | None
+    token_url: str | None
+    scopes: list[str]
+    access_token: str | None      # Decrypted
+    refresh_token: str | None     # Decrypted
+    expires_at: str | None        # ISO format
+```
+
+## Usage Pattern
+
+```python
+from bifrost import workflow, integrations
+import httpx
+
+@workflow
+async def sync_users():
+    # Get integration with OAuth
+    msft = await integrations.get("Microsoft_Graph")
+    if not msft or not msft.oauth:
+        return {"error": "Integration not configured"}
+
+    # Use the access token
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://graph.microsoft.com/v1.0/users",
+            headers={"Authorization": f"Bearer {msft.oauth.access_token}"}
+        )
+        return response.json()
+```
+
+## Configuration Merging
+
+Integration config is merged from two levels:
+1. **Integration defaults** - Platform-wide defaults
+2. **Organization overrides** - Per-org customizations
+
+The `config` dict in `IntegrationData` contains the merged result.
+
+## Token Handling
+
+OAuth tokens are:
+- Encrypted at rest in the database
+- Automatically decrypted when retrieved via SDK
+- Refreshed automatically by the platform when expired
+
+## See Also
+
+- [Integrations Overview](/core-concepts/integrations) - Concept guide
+- [Creating Integrations](/how-to-guides/integrations/creating-integrations) - Setup guide

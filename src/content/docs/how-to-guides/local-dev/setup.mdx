@@ -1,114 +1,55 @@
 ---
 title: Local Development
-description: Set up a local Bifrost environment for developing workflows or contributing to the platform
+description: Develop workflows locally against a Bifrost instance
 ---
 
 import { Aside, Steps, Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
 
+Develop workflows locally using the Bifrost SDK and CLI. No Docker required - connect directly to your Bifrost instance.
+
 ## Prerequisites
 
-- **Docker** and **Docker Compose** installed
-- **VS Code** with Python extension (for debugging)
+- **Python 3.11+** installed
+- Access to a Bifrost instance (cloud or self-hosted)
 
 ## Quick Start
 
 <Steps>
 
-1. **Clone the Bifrost repository**:
+1. **Install the Bifrost SDK**:
 
     ```bash
-    git clone https://github.com/jackmusick/bifrost.git
-    cd bifrost
+    pip install bifrost-sdk
     ```
 
-2. **Run setup script**:
+2. **Set your Bifrost API URL** (create a `.env` file or export):
 
     ```bash
-    ./setup.sh
+    export BIFROST_API_URL=https://your-bifrost-instance.com
     ```
 
-3. **Start all services**:
-
-    ```bash
-    docker compose up
-    ```
-
-4. **Access the application** at `http://localhost:3000`
-
-    The first user to register becomes the Platform Admin.
+3. **Start developing** - authentication happens automatically on first SDK call
 
 </Steps>
 
-## Development with Hot Reload
-
-For active development with hot reload on code changes:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-```
-
-### What the Dev Overlay Adds
-
-The `docker-compose.dev.yml` overlay adds:
-
-| Service | Dev Behavior |
-|---------|--------------|
-| **api** | Hot reload with uvicorn `--reload`, debugpy support |
-| **worker** | Auto-restart on code changes via watchmedo |
-| **scheduler** | Auto-restart on code changes |
-| **client** | Vite dev server with HMR |
-
-## Debugging with VS Code
-
-<Steps>
-
-1. **Enable debug mode** in `.env`:
-
-    ```bash
-    BIFROST_DEBUG=true
-    ```
-
-2. **Add a launch configuration** (`.vscode/launch.json`):
-
-    ```json
-    {
-      "version": "0.2.0",
-      "configurations": [
-        {
-          "name": "Attach to Bifrost API",
-          "type": "debugpy",
-          "request": "attach",
-          "connect": {
-            "host": "localhost",
-            "port": 5678
-          },
-          "pathMappings": [
-            {
-              "localRoot": "${workspaceFolder}/api/src",
-              "remoteRoot": "/app/src"
-            },
-            {
-              "localRoot": "${workspaceFolder}/api/shared",
-              "remoteRoot": "/app/shared"
-            }
-          ],
-          "justMyCode": false
-        }
-      ]
-    }
-    ```
-
-3. **Start with dev overlay** and attach debugger (F5)
-
-</Steps>
-
-<Aside type="note">
-When debug mode is enabled, check API logs for "Waiting for debugger..." message.
+<Aside type="tip">
+The SDK auto-authenticates using device code flow. Your browser opens, you enter a code, and credentials are saved to `~/.bifrost/credentials.json`.
 </Aside>
+
+## How Authentication Works
+
+When you first use the SDK, it automatically triggers device authorization:
+
+1. SDK detects no credentials exist
+2. Opens your browser to verification page
+3. You enter the displayed code and authenticate
+4. Credentials saved locally with auto-refresh
+
+Tokens refresh automatically when expired. Run `bifrost logout` to clear credentials.
 
 ## Creating Workflows
 
-Create Python files in the UI editor or upload via the API. They're stored in S3 and synced to workers automatically.
+Create Python files locally and test them before uploading:
 
 ```python
 from bifrost import workflow, context
@@ -116,77 +57,84 @@ from bifrost import workflow, context
 @workflow
 async def hello_world(name: str):
     """A simple example workflow."""
-    org = context.org_id
-    return {"message": f"Hello, {name}!", "org": org}
+    return {"message": f"Hello, {name}!", "org": context.org_id}
 ```
 
-See the [Writing Workflows](/how-to-guides/workflows/writing-workflows/) guide for more details.
+Use the web UI editor to upload, or sync via the API.
 
-## Viewing Logs
+## Using SDK Features Locally
+
+All SDK modules work in local development:
+
+```python
+from bifrost import ai, knowledge, config
+
+# AI completions
+response = await ai.complete("Summarize this ticket")
+
+# Knowledge store
+await knowledge.store("Policy content...", namespace="policies")
+results = await knowledge.search("refund policy", namespace="policies")
+
+# Configuration
+api_key = await config.get("external_api_key")
+```
+
+## IDE Setup
+
+### VS Code
+
+Install the Python extension and configure your interpreter to the venv with `bifrost-sdk` installed. The SDK provides full type hints.
+
+### Environment Variables
+
+Create a `.env` file in your project root:
 
 ```bash
-# All services
-docker compose logs -f
-
-# Specific service
-docker compose logs -f api
-docker compose logs -f worker
-docker compose logs -f scheduler
+BIFROST_API_URL=https://your-bifrost-instance.com
 ```
 
-## Stopping the Environment
+The SDK loads `.env` automatically via `python-dotenv` if installed.
 
-```bash
-docker compose down
-```
+## Self-Hosted Development
 
-To also remove volumes (fresh database):
+For contributors developing the platform itself, use Docker Compose:
 
-```bash
-docker compose down -v
-```
+<Steps>
 
-## Troubleshooting
+1. **Clone the repository**:
 
-### Port Conflicts
+    ```bash
+    git clone https://github.com/jackmusick/bifrost.git
+    cd bifrost
+    ```
 
-Check if ports are in use:
+2. **Start with hot reload**:
 
-```bash
-lsof -i :3000   # Client
-lsof -i :5678   # Debugpy
-lsof -i :5432   # PostgreSQL
-lsof -i :9000   # MinIO
-```
+    ```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+    ```
 
-### Debugger Won't Attach
+3. **Access at** `http://localhost:3000`
 
-1. Verify `BIFROST_DEBUG=true` in `.env`
-2. Check API logs for debugpy message:
-   ```bash
-   docker compose logs api | grep debugpy
-   ```
-3. Restart the environment
+</Steps>
 
-### Workflows Not Discovered
-
-1. Check API logs for import errors:
-   ```bash
-   docker compose logs api | grep -i error
-   ```
-2. Ensure Python files have valid `@workflow` decorators
-3. Verify there are no syntax errors in your workflow files
+| Service | Dev Behavior |
+|---------|--------------|
+| **api** | Hot reload with uvicorn, debugpy on port 5678 |
+| **worker** | Auto-restart on code changes |
+| **client** | Vite dev server with HMR |
 
 ## Next Steps
 
 <CardGrid>
   <Card title="Writing Workflows" icon="rocket">
-    [Learn workflow development →](/how-to-guides/workflows/writing-workflows/)
+    [Learn workflow development](/how-to-guides/workflows/writing-workflows/)
   </Card>
   <Card title="AI Coding Guide" icon="seti:ai">
-    [Use AI to write workflows →](/how-to-guides/local-dev/ai-coding)
+    [Use AI to write workflows](/how-to-guides/local-dev/ai-coding)
   </Card>
   <Card title="SDK Reference" icon="document">
-    [Explore the SDK →](/sdk-reference/sdk/bifrost-module)
+    [Explore the SDK](/sdk-reference/sdk/bifrost-module)
   </Card>
 </CardGrid>

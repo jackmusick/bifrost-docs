@@ -5,11 +5,11 @@ description: Connect to external APIs with OAuth in 20 minutes
 
 import { Steps, Aside } from "@astrojs/starlight/components";
 
-Instead of including a bunch of integrations, we give you the tools to build them by simplifying the difficult parts of building sustainable automation, including OAuth. In this section, you'll setup a Microsoft Graph application as an OAuth provider and see how to use it in your automation.
+Set up a Microsoft Graph integration with OAuth to access user data. This example shows the full pattern for any OAuth-based API.
 
 ## What You'll Build
 
-An OAuth connection to Microsoft Graph for reading user information.
+An integration with Microsoft Graph that reads user information using OAuth.
 
 ## Prerequisites
 
@@ -57,77 +57,35 @@ An OAuth connection to Microsoft Graph for reading user information.
     Save your Client ID, Client Secret, and Tenant ID - you'll need them next.
 </Aside>
 
-## Create OAuth Connection in Bifrost
+## Create Integration in Bifrost
 
 <Steps>
 
-1. Navigate to **Settings** → **Integrations** → **OAuth Connections**
+1. Navigate to **Settings** → **Integrations**
 
-1. Click **+ Add Connection**
+1. Click **Create Integration**
 
 1. Fill in details:
 
-    - **Connection Name**: Microsoft_Graph
-    - **Description**: My Microsoft Graph connection
+    - **Name**: Microsoft_Graph
+    - **Description**: Microsoft Graph API connection
 
-1. Click **Create**
-
-1. On `Custom Provider`, fill in the following:
+1. Configure OAuth:
 
     - **OAuth Flow Type**: Authorization Code (Interactive)
     - **Client ID**: The Client ID you copied earlier
     - **Client Secret**: The Client Secret you copied earlier
-    - **Authorization URL**: The OAuth 2.0 authorization endpoint (v2) you copied earlier
-    - **Token URL**: The OAuth 2.0 token endpoint (v2) you copied earlier
+    - **Authorization URL**: The OAuth 2.0 authorization endpoint (v2)
+    - **Token URL**: The OAuth 2.0 token endpoint (v2)
     - **Scope**: offline_access Directory.Read.All
 
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-
-        {" "}
-        <Aside type="tip">
-            `offline_access` is usually what tells a provider you want a
-            `refresh_token`, which allows you to maintain continuous access to a
-            service until that access is revoked. You normally want this when
-            setting up an OAuth connection in a platform like Bifrost.
-        </Aside>
+    <Aside type="tip">
+        `offline_access` requests a refresh token for continuous access without re-authentication.
+    </Aside>
 
     ![alt text](../../../assets/oauth-integration/image-6.png)
+
+1. Click **Save**
 
 </Steps>
 
@@ -135,7 +93,7 @@ An OAuth connection to Microsoft Graph for reading user information.
 
 <Steps>
 
-1. Click **Connect** on your application
+1. Click **Connect** on your integration
 
 1. Sign in with Microsoft and consent to permissions
 
@@ -147,17 +105,16 @@ An OAuth connection to Microsoft Graph for reading user information.
 
 </Steps>
 
-## Use OAuth in Workflow
+## Use Integration in Workflow
 
 <Steps>
 
 1. In the Code Editor, create a new workflow called `list_users.py`
 
     ```python
-    from bifrost import workflow, param, oauth, ExecutionContext
-    import requests
+    from bifrost import workflow, integrations
+    import httpx
     import logging
-    import json
 
     logger = logging.getLogger(__name__)
 
@@ -165,21 +122,23 @@ An OAuth connection to Microsoft Graph for reading user information.
         name="list_users",
         description="List users from Microsoft Graph"
     )
-    async def list_users(context: ExecutionContext):
+    async def list_users():
         """Fetch user information from Microsoft Graph."""
 
-        # Get OAuth connection
-        oauth_response = await oauth.get("Microsoft_Graph")
+        # Get integration with OAuth credentials
+        integration = await integrations.get("Microsoft_Graph")
+        if not integration or not integration.oauth:
+            return {"error": "Microsoft Graph not configured"}
 
-        logger.info("Retrieved oauth response")
-        url = "https://graph.microsoft.com/v1.0/users"
-        headers = {
-            "Authorization": f"Bearer {oauth_response['access_token']}"
-        }
+        logger.info("Retrieved Microsoft Graph integration")
 
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        users = response.json()['value']
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://graph.microsoft.com/v1.0/users",
+                headers={"Authorization": f"Bearer {integration.oauth.access_token}"}
+            )
+            response.raise_for_status()
+            users = response.json()["value"]
 
         return users
     ```
@@ -192,23 +151,24 @@ An OAuth connection to Microsoft Graph for reading user information.
 
 ## Token Refresh
 
-Bifrost automatically refreshes expired tokens provided your connection returned a refresh token. It'll tell you if it doesn't. If the connection is unable to refresh for some reason -- such as the password on the account you used to authenticate becoming invalid -- you'll see the error on the OAUTH Connections screen.
+Bifrost automatically refreshes expired tokens when your connection has a refresh token. If refresh fails (e.g., password changed), you'll see the error on the Integrations screen.
 
 ## Multiple Organizations
 
-OAuth connections are organization-scoped:
+Integrations support per-organization OAuth tokens:
 
--   Each org can have its own `microsoft-graph` connection
--   Workflows automatically use the executing org's credentials or fall back on the global connection, but you can specify something else if you want like this:
+-   Each org can have its own Microsoft Graph connection
+-   Workflows automatically use the executing org's credentials
+-   Falls back to integration-level defaults if no org-specific token
 
-    ```python
-    await oauth.get("Microsoft_Graph", 'some-other-org-id')
-    ```
-
--   No code changes needed for multi-tenancy!
+```python
+# Automatically uses the right token for the current org
+integration = await integrations.get("Microsoft_Graph")
+token = integration.oauth.access_token
+```
 
 ## Next Steps
 
--   [OAuth Setup Guide](/how-to-guides/integrations/oauth-setup) - Advanced OAuth patterns
+-   [Creating Integrations](/how-to-guides/integrations/creating-integrations) - Full integration setup
+-   [SDK Generation](/how-to-guides/integrations/sdk-generation) - Generate API clients
 -   [Secrets Management](/how-to-guides/integrations/secrets-management) - Secure credential storage
--   [Microsoft Graph Guide](/how-to-guides/integrations/microsoft-graph) - Common Graph API patterns

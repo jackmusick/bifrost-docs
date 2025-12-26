@@ -1,0 +1,205 @@
+---
+title: Knowledge Module
+description: SDK reference for vector storage and semantic search
+---
+
+The `knowledge` module provides vector storage and semantic search for RAG.
+
+## Import
+
+```python
+from bifrost import knowledge
+```
+
+## Methods
+
+### knowledge.store()
+
+Store a document with automatic embedding.
+
+```python
+async def store(
+    content: str,
+    *,
+    namespace: str = "default",
+    key: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    org_id: str | None = None,
+    scope: str | None = None,
+) -> str
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `content` | str | Document text to store |
+| `namespace` | str | Namespace for organization (default: "default") |
+| `key` | str | Unique key for upsert behavior |
+| `metadata` | dict | Arbitrary metadata |
+| `org_id` | str | Organization context |
+| `scope` | str | "global" or "org" (default: org) |
+
+#### Returns
+
+Document ID string.
+
+#### Example
+
+```python
+doc_id = await knowledge.store(
+    "Our refund policy allows returns within 30 days.",
+    namespace="policies",
+    key="refund-policy",
+    metadata={"version": "2.0"}
+)
+```
+
+### knowledge.store_many()
+
+Batch store multiple documents.
+
+```python
+async def store_many(
+    documents: list[dict[str, Any]],
+    *,
+    namespace: str = "default",
+    org_id: str | None = None,
+    scope: str | None = None,
+) -> list[str]
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `documents` | list[dict] | List of `{content, key?, metadata?}` |
+| `namespace` | str | Namespace for all documents |
+| `org_id` | str | Organization context |
+| `scope` | str | "global" or "org" |
+
+#### Example
+
+```python
+docs = [
+    {"content": "Doc 1...", "key": "doc-1"},
+    {"content": "Doc 2...", "metadata": {"type": "faq"}}
+]
+ids = await knowledge.store_many(docs, namespace="docs")
+```
+
+### knowledge.search()
+
+Semantic search across documents.
+
+```python
+async def search(
+    query: str,
+    *,
+    namespace: str | list[str] = "default",
+    limit: int = 5,
+    org_id: str | None = None,
+    scope: str | None = None,
+) -> list[KnowledgeDocument]
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | str | Search query |
+| `namespace` | str \| list | Namespace(s) to search |
+| `limit` | int | Max results (default: 5) |
+| `org_id` | str | Organization context |
+| `scope` | str | Filter by scope |
+
+#### Returns
+
+List of `KnowledgeDocument` objects sorted by relevance.
+
+#### Example
+
+```python
+results = await knowledge.search(
+    "refund policy",
+    namespace=["policies", "faq"],
+    limit=10
+)
+for doc in results:
+    print(f"{doc.score:.2f}: {doc.content[:100]}")
+```
+
+### knowledge.list_namespaces()
+
+List all namespaces with document counts.
+
+```python
+async def list_namespaces(
+    org_id: str | None = None
+) -> list[NamespaceInfo]
+```
+
+#### Example
+
+```python
+namespaces = await knowledge.list_namespaces()
+for ns in namespaces:
+    print(f"{ns.namespace}: {ns.scopes['total']} docs")
+```
+
+### knowledge.delete()
+
+Delete a document by ID.
+
+```python
+async def delete(
+    doc_id: str,
+    org_id: str | None = None
+) -> bool
+```
+
+#### Example
+
+```python
+success = await knowledge.delete(doc_id)
+```
+
+## Types
+
+### KnowledgeDocument
+
+```python
+class KnowledgeDocument(BaseModel):
+    id: str
+    namespace: str
+    content: str
+    metadata: dict | None
+    score: float | None        # Similarity score (0-1)
+    organization_id: str | None
+    key: str | None
+    created_at: datetime | None
+```
+
+### NamespaceInfo
+
+```python
+class NamespaceInfo(BaseModel):
+    namespace: str
+    scopes: dict   # {"global": N, "org": N, "total": N}
+```
+
+## Scopes
+
+Documents can be scoped:
+
+| Scope | Description |
+|-------|-------------|
+| `org` | Only visible to the storing organization (default) |
+| `global` | Visible to all organizations |
+
+Search returns both global and org-specific documents automatically.
+
+## See Also
+
+- [Knowledge Bases](/how-to-guides/ai/knowledge-bases) - Usage guide
+- [AI Module](/sdk-reference/sdk/ai-module) - Using knowledge with completions

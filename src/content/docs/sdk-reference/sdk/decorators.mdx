@@ -43,7 +43,10 @@ This automatically:
     endpoint_enabled: bool = False,
     allowed_methods: list[str] | None = None,
     disable_global_key: bool = False,
-    public_endpoint: bool = False
+    public_endpoint: bool = False,
+    is_tool: bool = False,
+    tool_description: str | None = None,
+    time_saved: int | None = None
 )
 ```
 
@@ -63,6 +66,9 @@ This automatically:
 | `allowed_methods` | list | None | HTTP methods allowed (GET, POST, etc.) |
 | `disable_global_key` | bool | False | Require workflow-specific API key |
 | `public_endpoint` | bool | False | Skip authentication for webhooks |
+| `is_tool` | bool | False | Make callable by AI agents |
+| `tool_description` | str | None | Description for AI agent tool use |
+| `time_saved` | int | None | Estimated minutes saved per execution (for ROI tracking) |
 
 ### Auto-Generated ID
 
@@ -131,6 +137,19 @@ async def handle_webhook(payload: dict):
     """Handle incoming webhook."""
     # Available at: POST /api/endpoints/handle_webhook
     return {"status": "processed"}
+```
+  </TabItem>
+
+  <TabItem label="AI Tool" icon="seti:ai">
+```python
+@workflow(
+    is_tool=True,
+    tool_description="Look up a customer by email address and return their account details"
+)
+async def lookup_customer(email: str):
+    """Look up customer information."""
+    customer = await get_customer(email)
+    return {"name": customer.name, "account": customer.id}
 ```
   </TabItem>
 </Tabs>

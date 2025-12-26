@@ -12,7 +12,7 @@ import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 from bifrost import workflow, data_provider, context
 
 # SDK modules (all async)
-from bifrost import config, oauth, files
+from bifrost import ai, knowledge, config, integrations, files
 
 # Types (optional, for type hints)
 from bifrost import ExecutionContext, Organization
@@ -152,6 +152,53 @@ See [Context API](/sdk-reference/sdk/context-api) for complete reference.
 
 ## SDK Modules
 
+### ai
+
+LLM completions and streaming with optional RAG support.
+
+```python
+from bifrost import ai
+
+# Simple completion
+response = await ai.complete("Summarize this text")
+print(response.content)
+
+# Structured output
+from pydantic import BaseModel
+class Analysis(BaseModel):
+    sentiment: str
+    score: float
+
+result = await ai.complete("Analyze: Great!", response_format=Analysis)
+
+# With knowledge base (RAG)
+response = await ai.complete("What is the policy?", knowledge=["policies"])
+
+# Streaming
+async for chunk in ai.stream("Write a story"):
+    print(chunk.content, end="")
+```
+
+See [AI Module Reference](/sdk-reference/sdk/ai-module) for full API.
+
+### knowledge
+
+Vector storage and semantic search for RAG.
+
+```python
+from bifrost import knowledge
+
+# Store document
+doc_id = await knowledge.store("Content...", namespace="docs", key="doc-1")
+
+# Semantic search
+results = await knowledge.search("query", namespace="docs", limit=5)
+for doc in results:
+    print(f"{doc.score}: {doc.content[:100]}")
+```
+
+See [Knowledge Module Reference](/sdk-reference/sdk/knowledge-module) for full API.
+
 ### config
 
 Configuration and secrets management with org scoping.
@@ -210,87 +257,81 @@ for key, value in all_configs.items():
   </TabItem>
 </Tabs>
 
-### oauth
+### integrations
 
-OAuth connection and token management.
+Access integration configurations and OAuth credentials.
 
 <Aside type="caution">
-All oauth methods are **async** and must be awaited.
+All integrations methods are **async** and must be awaited.
 </Aside>
 
 **Functions**:
 
 | Function | Parameters | Returns | Description |
 |----------|-----------|---------|-------------|
-| `get(provider, org_id=None)` | provider: str, org_id: str \| None | dict \| None | Get full OAuth connection config |
+| `get(name, org_id=None)` | name: str, org_id: str \| None | IntegrationData \| None | Get integration with OAuth tokens |
 
-**Connection Data Structure**:
-
-The `get()` method returns a dictionary with full OAuth configuration:
+**IntegrationData Structure**:
 
 ```python
 {
-    "connection_name": str,    # Provider/connection name
-    "client_id": str,          # OAuth client ID
-    "client_secret": str,      # OAuth client secret (decrypted)
-    "authorization_url": str,  # Authorization endpoint
-    "token_url": str,          # Token endpoint
-    "scopes": list[str],       # Configured scopes
-    "access_token": str,       # Current access token (decrypted)
-    "refresh_token": str,      # Refresh token (decrypted, if available)
-    "expires_at": str          # ISO timestamp when token expires
+    "integration_id": str,     # Integration ID
+    "entity_id": str | None,   # External entity ID (tenant, company)
+    "entity_name": str | None, # Display name
+    "config": dict,            # Merged configuration
+    "oauth": {                 # OAuth credentials (if configured)
+        "access_token": str,   # Decrypted
+        "refresh_token": str,  # Decrypted
+        "expires_at": str,     # ISO timestamp
+        ...
+    }
 }
 ```
 
 <Tabs>
   <TabItem label="Simple API Call" icon="approve-check">
 ```python
-from bifrost import oauth
-import aiohttp
+from bifrost import integrations
+import httpx
 
-# Get OAuth connection
-conn = await oauth.get("microsoft")
-if not conn:
-    raise ValueError("Microsoft OAuth not configured")
+# Get integration with OAuth
+integration = await integrations.get("Microsoft_Graph")
+if not integration or not integration.oauth:
+    raise ValueError("Integration not configured")
 
 # Use access_token for API calls
-url = "https://graph.microsoft.com/v1.0/me"
-headers = {"Authorization": f"Bearer {conn['access_token']}"}
-
-async with aiohttp.ClientSession() as session:
-    async with session.get(url, headers=headers) as resp:
-        return await resp.json()
+async with httpx.AsyncClient() as client:
+    response = await client.get(
+        "https://graph.microsoft.com/v1.0/me",
+        headers={"Authorization": f"Bearer {integration.oauth.access_token}"}
+    )
+    return response.json()
 ```
   </TabItem>
 
-  <TabItem label="Cross-Tenant Exchange" icon="key">
+  <TabItem label="With Config Values" icon="setting">
 ```python
-from bifrost import oauth
-import aiohttp
+from bifrost import integrations
 
-# Get full credentials for token exchange (e.g., GDAP)
-conn = await oauth.get("Microsoft_GDAP")
-if not conn:
-    raise ValueError("GDAP OAuth not configured")
+# Get integration with config
+integration = await integrations.get("HaloPSA")
+if not integration:
+    raise ValueError("HaloPSA not configured")
 
-# Exchange refresh token for tenant-specific access
-token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-async with aiohttp.ClientSession() as session:
-    async with session.post(token_url, data={
-        "grant_type": "refresh_token",
-        "refresh_token": conn["refresh_token"],
-        "client_id": conn["client_id"],
-        "client_secret": conn["client_secret"],
-        "scope": "https://graph.microsoft.com/.default"
-    }) as resp:
-        result = await resp.json()
-        return result["access_token"]
+# Access config values
+base_url = integration.config.get("base_url")
+tenant_id = integration.entity_id
+
+# Use OAuth token
+token = integration.oauth.access_token
 ```
   </TabItem>
 </Tabs>
 
+See [Integrations Module Reference](/sdk-reference/sdk/integrations-module) for full API.
+
 <Aside type="note">
-Bifrost automatically refreshes expired tokens before execution.
+Bifrost automatically refreshes expired OAuth tokens.
 </Aside>
 
 ### files
