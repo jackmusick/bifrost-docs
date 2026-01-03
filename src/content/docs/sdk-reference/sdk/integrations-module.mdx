@@ -20,7 +20,6 @@ Get integration configuration with OAuth tokens.
 ```python
 async def get(
     name: str,
-    org_id: str | None = None,
     scope: str | None = None,
 ) -> IntegrationData | None
 ```
@@ -30,8 +29,12 @@ async def get(
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `name` | str | Integration name (e.g., "HaloPSA", "Microsoft_Graph") |
-| `org_id` | str | Organization ID (auto-set in workflows) |
-| `scope` | str | When set to `"global"`, accesses platform-level integration defaults regardless of org_id |
+| `scope` | str \| None | Organization scope (see below) |
+
+**Scope parameter:**
+- `None` (default): Use execution context's organization
+- Org UUID string: Target specific organization
+- `"global"`: Access platform-level integration defaults
 
 #### Returns
 
@@ -57,17 +60,16 @@ if integration:
 List all organization mappings for an integration.
 
 ```python
-async def list_mappings(
-    name: str
-) -> list[IntegrationMappingResponse] | None
+async def list_mappings(name: str) -> list[IntegrationMappingResponse] | None
 ```
 
 #### Example
 
 ```python
 mappings = await integrations.list_mappings("HaloPSA")
-for mapping in mappings:
-    print(f"Org: {mapping.organization_id}, Entity: {mapping.entity_id}")
+if mappings:
+    for mapping in mappings:
+        print(f"Org: {mapping.organization_id}, Entity: {mapping.entity_id}")
 ```
 
 ### integrations.get_mapping()
@@ -77,7 +79,7 @@ Get a specific organization mapping for an integration.
 ```python
 async def get_mapping(
     name: str,
-    org_id: str | None = None,
+    scope: str | None = None,
     entity_id: str | None = None,
 ) -> IntegrationMappingResponse | None
 ```
@@ -87,13 +89,22 @@ async def get_mapping(
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `name` | str | Integration name |
-| `org_id` | str | Organization ID (auto-set in workflows) |
+| `scope` | str \| None | Organization scope (see below) |
 | `entity_id` | str | External entity ID to filter by |
+
+**Scope parameter:**
+- `None` (default): Use execution context's organization
+- Org UUID string: Target specific organization
 
 #### Example
 
 ```python
-mapping = await integrations.get_mapping("HaloPSA", org_id="org-123")
+# Get by scope
+mapping = await integrations.get_mapping("HaloPSA", scope="org-123")
+
+# Get by entity_id
+mapping = await integrations.get_mapping("HaloPSA", entity_id="tenant-456")
+
 if mapping:
     print(f"Entity: {mapping.entity_id}, Config: {mapping.config}")
 ```
@@ -105,7 +116,7 @@ Create or update an organization mapping for an integration.
 ```python
 async def upsert_mapping(
     name: str,
-    org_id: str,
+    scope: str,            # Required
     entity_id: str,
     entity_name: str | None = None,
     config: dict | None = None,
@@ -117,7 +128,7 @@ async def upsert_mapping(
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `name` | str | Integration name |
-| `org_id` | str | Organization ID |
+| `scope` | str | Organization ID (**required**) |
 | `entity_id` | str | External entity ID (tenant, company, etc.) |
 | `entity_name` | str | Display name for the entity |
 | `config` | dict | Organization-specific configuration overrides |
@@ -127,7 +138,7 @@ async def upsert_mapping(
 ```python
 mapping = await integrations.upsert_mapping(
     "HaloPSA",
-    org_id="org-123",
+    scope="org-123",
     entity_id="tenant-456",
     entity_name="Acme Corp",
     config={"custom_field": "value"}
@@ -141,7 +152,7 @@ Delete an organization mapping for an integration.
 ```python
 async def delete_mapping(
     name: str,
-    org_id: str,
+    scope: str,            # Required
 ) -> bool
 ```
 
@@ -150,12 +161,12 @@ async def delete_mapping(
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `name` | str | Integration name |
-| `org_id` | str | Organization ID |
+| `scope` | str | Organization ID (**required**) |
 
 #### Example
 
 ```python
-deleted = await integrations.delete_mapping("HaloPSA", org_id="org-123")
+deleted = await integrations.delete_mapping("HaloPSA", scope="org-123")
 ```
 
 ## Types

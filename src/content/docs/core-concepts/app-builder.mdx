@@ -1,0 +1,262 @@
+---
+title: App Builder
+description: Build custom applications with a visual editor and JSON definitions
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Experimental Feature">
+App Builder is currently experimental. APIs and schema may change in future releases.
+</Aside>
+
+## What is App Builder?
+
+App Builder lets you create custom web applications using a visual editor or JSON definitions. Applications consist of pages with layouts, components, and actions - all without writing frontend code.
+
+**Key capabilities:**
+
+- Visual drag-and-drop editor
+- 20+ pre-built components (tables, forms, charts, etc.)
+- Expression syntax for dynamic content (`{{ user.name }}`)
+- Workflow integration for backend logic
+- Role-based permissions
+- Embeddable in external sites
+
+## How It Works
+
+```
+Define pages → Add components → Configure actions → Publish
+```
+
+**Application lifecycle:**
+
+1. Create application in editor
+2. Add pages with layouts (rows, columns, grids)
+3. Drop components and configure properties
+4. Connect to workflows and data sources
+5. Set up permissions
+6. Publish and share
+
+## Core Concepts
+
+### Pages
+
+Pages are the screens of your application. Each page has:
+
+- **Path**: URL route (e.g., `/dashboard`, `/users/:id`)
+- **Layout**: Component arrangement (rows, columns, grids)
+- **Data Sources**: Data loaded when page mounts
+- **Launch Workflow**: Optional workflow to run on page load
+- **Permissions**: Who can access the page
+
+### Layouts
+
+Layouts arrange components using flexbox or grid:
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `row` | Horizontal flex container | Toolbars, button groups |
+| `column` | Vertical flex container | Forms, card stacks |
+| `grid` | CSS grid with columns | Dashboards, galleries |
+
+Layouts can be nested for complex arrangements.
+
+### Components
+
+Components are the building blocks:
+
+- **Display**: Heading, Text, Image, Badge, Progress, StatCard
+- **Data**: DataTable, Tabs, FileViewer
+- **Input**: TextInput, NumberInput, Select, Checkbox
+- **Interactive**: Button, Modal, Card
+- **Forms**: FormEmbed, FormGroup
+
+See [Components Reference](/sdk-reference/app-builder/components) for full details.
+
+### Expressions
+
+Dynamic content uses `{{ expression }}` syntax:
+
+```javascript
+// Access user data
+{{ user.name }}
+{{ user.email }}
+
+// Access page variables
+{{ variables.selectedId }}
+
+// Access form field values
+{{ field.customerName }}
+
+// Access workflow results
+{{ workflow.result.orderId }}
+
+// Comparisons and logic
+{{ user.role == 'admin' }}
+{{ variables.count > 0 && user.isActive }}
+```
+
+See [Expressions Reference](/sdk-reference/app-builder/expressions) for full syntax.
+
+### Actions
+
+Components trigger actions on user interaction:
+
+- **navigate**: Go to another page
+- **workflow**: Execute a backend workflow
+- **set-variable**: Update a page variable
+- **refresh-table**: Reload a data source
+- **submit**: Submit form fields to a workflow
+
+See [Actions Reference](/sdk-reference/app-builder/actions) for configuration.
+
+## Quick Example
+
+A simple dashboard with a data table:
+
+```json
+{
+  "id": "dashboard-app",
+  "name": "Customer Dashboard",
+  "version": "1.0.0",
+  "pages": [
+    {
+      "id": "home",
+      "title": "Customers",
+      "path": "/",
+      "dataSources": [
+        {
+          "id": "customers",
+          "type": "workflow",
+          "workflowId": "get_customers"
+        }
+      ],
+      "layout": {
+        "type": "column",
+        "gap": 16,
+        "children": [
+          {
+            "id": "title",
+            "type": "heading",
+            "props": {
+              "text": "Customer List",
+              "level": 1
+            }
+          },
+          {
+            "id": "table",
+            "type": "data-table",
+            "props": {
+              "dataSource": "customers",
+              "columns": [
+                { "key": "name", "header": "Name" },
+                { "key": "email", "header": "Email" },
+                { "key": "status", "header": "Status", "type": "badge" }
+              ],
+              "rowActions": [
+                {
+                  "label": "View",
+                  "onClick": {
+                    "type": "navigate",
+                    "navigateTo": "/customers/{{ row.id }}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+## Permissions
+
+### Application Level
+
+Control who can access the entire app:
+
+```json
+{
+  "permissions": {
+    "public": false,
+    "defaultLevel": "none",
+    "rules": [
+      { "role": "admin", "level": "admin" },
+      { "role": "*", "level": "view" }
+    ]
+  }
+}
+```
+
+### Page Level
+
+Restrict specific pages:
+
+```json
+{
+  "permission": {
+    "allowedRoles": ["admin", "manager"],
+    "redirectTo": "/access-denied"
+  }
+}
+```
+
+### Component Level
+
+Hide components with expressions:
+
+```json
+{
+  "type": "button",
+  "visible": "{{ user.role == 'admin' }}",
+  "props": { "label": "Delete All" }
+}
+```
+
+## Data Flow
+
+```
+Page Load
+    ↓
+Run Launch Workflow (optional)
+    ↓
+Load Data Sources
+    ↓
+Render Layout with Expression Context
+    ↓
+User Interaction → Trigger Action
+    ↓
+Execute Workflow / Navigate / Update Variable
+    ↓
+Re-render with Updated Context
+```
+
+### Expression Context
+
+Components receive context for expression evaluation:
+
+| Variable | Description |
+|----------|-------------|
+| `user` | Current user (id, name, email, role) |
+| `variables` | Page-level mutable state |
+| `data` | Loaded data sources by ID |
+| `field` | Form input values |
+| `workflow` | Last workflow execution result |
+| `row` | Current row (in table actions only) |
+
+## Best Practices
+
+1. **Keep pages focused**: One purpose per page
+2. **Use data sources**: Don't hardcode data in components
+3. **Validate in workflows**: Backend validation is required
+4. **Test permissions**: Verify access controls work correctly
+5. **Use variables sparingly**: Complex state should live in workflows
+
+## Next Steps
+
+- [Components Reference](/sdk-reference/app-builder/components) - All available components
+- [Expressions Reference](/sdk-reference/app-builder/expressions) - Expression syntax
+- [Actions Reference](/sdk-reference/app-builder/actions) - Action configuration
+- [Schema Reference](/sdk-reference/app-builder/schema) - Complete JSON schema

@@ -126,17 +126,20 @@ async def create_user(email: str, department: str):
 
 ## Execution Context
 
-Access organization, user, and execution metadata:
+Access organization, user, and execution metadata via the `context` proxy:
 
 ```python
-async def my_workflow(context: ExecutionContext):
+from bifrost import context
+
+@workflow
+async def my_workflow(name: str):
     # Organization
     org_id = context.org_id
     org_name = context.org_name
 
     # User
     user_id = context.user_id
-    user_email = context.email
+    email = context.email
     user_name = context.name
 
     # Execution

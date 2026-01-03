@@ -24,7 +24,6 @@ async def store(
     namespace: str = "default",
     key: str | None = None,
     metadata: dict[str, Any] | None = None,
-    org_id: str | None = None,
     scope: str | None = None,
 ) -> str
 ```
@@ -37,8 +36,12 @@ async def store(
 | `namespace` | str | Namespace for organization (default: "default") |
 | `key` | str | Unique key for upsert behavior |
 | `metadata` | dict | Arbitrary metadata |
-| `org_id` | str | Organization context |
-| `scope` | str | "global" or "org" (default: org) |
+| `scope` | str \| None | Organization scope (see below) |
+
+**Scope parameter:**
+- `None` (default): Use execution context's organization
+- Org UUID string: Target specific organization
+- `"global"`: Store at platform-level (visible to all orgs)
 
 #### Returns
 
@@ -64,7 +67,6 @@ async def store_many(
     documents: list[dict[str, Any]],
     *,
     namespace: str = "default",
-    org_id: str | None = None,
     scope: str | None = None,
 ) -> list[str]
 ```
@@ -75,8 +77,7 @@ async def store_many(
 |-----------|------|-------------|
 | `documents` | list[dict] | List of `{content, key?, metadata?}` |
 | `namespace` | str | Namespace for all documents |
-| `org_id` | str | Organization context |
-| `scope` | str | "global" or "org" |
+| `scope` | str \| None | Organization scope (see above) |
 
 #### Example
 
@@ -100,7 +101,6 @@ async def search(
     limit: int = 5,
     min_score: float | None = None,
     metadata_filter: dict[str, Any] | None = None,
-    org_id: str | None = None,
     fallback: bool = True,
 ) -> list[KnowledgeDocument]
 ```
@@ -114,7 +114,6 @@ async def search(
 | `limit` | int | Max results (default: 5) |
 | `min_score` | float | Minimum similarity score (0-1) |
 | `metadata_filter` | dict | Filter by metadata fields |
-| `org_id` | str | Organization context |
 | `fallback` | bool | Also search global scope (default: True) |
 
 #### Returns
@@ -147,10 +146,17 @@ List all namespaces with document counts.
 
 ```python
 async def list_namespaces(
-    org_id: str | None = None,
+    scope: str | None = None,
     include_global: bool = True,
 ) -> list[NamespaceInfo]
 ```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `scope` | str \| None | Organization scope (see above) |
+| `include_global` | bool | Include global namespaces (default: True) |
 
 #### Example
 
@@ -169,10 +175,17 @@ async def get(
     key: str,
     *,
     namespace: str = "default",
-    org_id: str | None = None,
     scope: str | None = None,
 ) -> KnowledgeDocument | None
 ```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | str | Document key |
+| `namespace` | str | Namespace to search in |
+| `scope` | str \| None | Organization scope (see above) |
 
 #### Example
 
@@ -191,10 +204,17 @@ async def delete(
     key: str,
     *,
     namespace: str = "default",
-    org_id: str | None = None,
     scope: str | None = None,
 ) -> bool
 ```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | str | Document key to delete |
+| `namespace` | str | Namespace containing the document |
+| `scope` | str \| None | Organization scope (see above) |
 
 #### Example
 
@@ -210,10 +230,16 @@ Delete all documents in a namespace.
 async def delete_namespace(
     namespace: str,
     *,
-    org_id: str | None = None,
     scope: str | None = None,
 ) -> int
 ```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `namespace` | str | Namespace to delete |
+| `scope` | str \| None | Organization scope (see above) |
 
 #### Returns
 
@@ -259,7 +285,7 @@ Documents can be scoped:
 | `org` | Only visible to the storing organization (default) |
 | `global` | Visible to all organizations |
 
-Search returns both global and org-specific documents automatically.
+Search returns both global and org-specific documents automatically when `fallback=True`.
 
 ## See Also
 

@@ -94,7 +94,7 @@ Display dynamic content with full context access:
 
 ```jsx
 <div className="p-4 bg-blue-50 rounded">
-    <h3>Welcome, {context.workflow.user_email}!</h3>
+    <h3>Welcome, {context.workflow.email}!</h3>
     {context.workflow.is_admin && (
         <p className="text-red-600">Admin Access Enabled</p>
     )}
