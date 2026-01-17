@@ -1,0 +1,13 @@
+{
+  "mappings": {
+    "configuration": {},
+    "configuration_type": {},
+    "custom_asset": {},
+    "custom_asset_type": {},
+    "document": {},
+    "location": {},
+    "organization": {},
+    "password": {}
+  },
+  "version": 1
+}

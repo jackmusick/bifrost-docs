@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bifrost-docs-api
+  namespace: bifrost-docs
+  labels:
+    app.kubernetes.io/name: bifrost-docs-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: bifrost-docs
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bifrost-docs-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bifrost-docs-api
+        app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: bifrost-docs
+    spec:
+      # Init container runs migrations before API starts
+      initContainers:
+        - name: init
+          image: jackmusick/bifrost-docs-api:latest
+          command: ["python", "-m", "scripts.init_container"]
+          envFrom:
+            - configMapRef:
+                name: bifrost-docs-config
+            - secretRef:
+                name: bifrost-docs-secrets
+      containers:
+        - name: api
+          image: jackmusick/bifrost-docs-api:latest
+          command:
+            ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: bifrost-docs-config
+            - secretRef:
+                name: bifrost-docs-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      # Run as non-root user (matches Dockerfile)
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000

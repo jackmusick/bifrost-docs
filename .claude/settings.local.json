@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python -c \"from src.routers.search import router; print(''Import successful'')\")",
+      "Bash(.venv/bin/python -c \"from src.services.ai_chat import ConversationalChatService; print(''Import successful'')\")",
+      "Bash(.venv/bin/python -c \"from src.routers.search import router; print(''Backend import successful'')\")",
+      "Bash(poetry run pyright src/services/llm/anthropic_client.py src/services/llm/base.py src/routers/search.py)",
+      "Bash(.venv/bin/pyright src/services/llm/anthropic_client.py src/services/llm/base.py src/routers/search.py)",
+      "Bash(.venv/bin/ruff check src/services/llm/anthropic_client.py src/services/llm/base.py src/routers/search.py)",
+      "Bash(.venv/bin/ruff check src/routers/search.py)",
+      "Bash(.venv/bin/ruff check src/core/pubsub.py src/routers/search.py src/services/ai_chat.py)",
+      "WebFetch(domain:tiptap.dev)",
+      "mcp__context7__query-docs"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

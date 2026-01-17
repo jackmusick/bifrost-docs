@@ -1,0 +1,8 @@
+{
+  "include": ["api/src", "api/tests"],
+  "exclude": ["**/node_modules", "**/__pycache__", ".git", "api/alembic"],
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.11",
+  "reportMissingTypeStubs": false,
+  "extraPaths": ["api"]
+}

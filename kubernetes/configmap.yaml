@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bifrost-docs-config
+  namespace: bifrost-docs
+  labels:
+    app.kubernetes.io/name: bifrost-docs
+    app.kubernetes.io/part-of: bifrost-docs
+data:
+  # Environment
+  BIFROST_DOCS_ENVIRONMENT: "production"
+  BIFROST_DOCS_DEBUG: "false"
+
+  # S3 Configuration (non-sensitive)
+  BIFROST_DOCS_S3_BUCKET: "gocovi-bifrost-docs"
+  BIFROST_DOCS_S3_REGION: "us-east-1"
+
+  # JWT Settings
+  BIFROST_DOCS_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  BIFROST_DOCS_REFRESH_TOKEN_EXPIRE_DAYS: "7"
+
+  # MFA Settings
+  BIFROST_DOCS_MFA_ENABLED: "true"
+  BIFROST_DOCS_MFA_TOTP_ISSUER: "BifrostDocs"
+
+  # WebAuthn/Passkeys Configuration
+  BIFROST_DOCS_WEBAUTHN_RP_ID: "docs.gocovi.com"
+  BIFROST_DOCS_WEBAUTHN_RP_NAME: "BifrostDocs"
+  BIFROST_DOCS_WEBAUTHN_ORIGIN: "https://docs.gocovi.com"
+
+  # CORS
+  BIFROST_DOCS_CORS_ORIGINS: "https://docs.gocovi.com"

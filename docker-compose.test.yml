@@ -1,0 +1,203 @@
+# Bifrost Docs Docker Stack - Isolated Test Environment
+#
+# This compose file creates a completely isolated test environment with:
+# - Separate container names (bifrost-docs-test-*)
+# - NO exposed ports (all communication via Docker network)
+# - Fresh database for each test run
+# - PgBouncer for connection pooling (matches production)
+#
+# NOTE: Ports are NOT exposed to the host, allowing tests to run while
+# the development stack is running on the default ports.
+#
+# Usage:
+#   ./test.sh                          # Run unit/integration tests
+#   ./test.sh tests/unit/ -v           # Run only unit tests
+
+name: bifrost-docs-test
+
+services:
+  # PostgreSQL Database (Test) - with pgvector extension
+  # Uses tmpfs so data is NOT persisted between test runs - fresh database each time
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: bifrost-docs-test-postgres
+    environment:
+      POSTGRES_DB: bifrost_docs_test
+      POSTGRES_USER: bifrost_docs
+      POSTGRES_PASSWORD: bifrost_docstest
+    # No ports exposed - all access via Docker network
+    tmpfs:
+      - /var/lib/postgresql/data  # Ephemeral storage - fresh each run
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bifrost_docs -d bifrost_docs_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  # PgBouncer - Connection Pooler (Test)
+  # All services connect through PgBouncer, matching production architecture
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: bifrost-docs-test-pgbouncer
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: bifrost_docs_test
+      DB_USER: bifrost_docs
+      DB_PASSWORD: bifrost_docstest
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 10
+      MIN_POOL_SIZE: 2
+      RESERVE_POOL_SIZE: 2
+      AUTH_TYPE: plain
+    # No ports exposed - all access via Docker network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "5432", "-U", "bifrost_docs"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  # Redis (Test)
+  redis:
+    image: redis:7-alpine
+    container_name: bifrost-docs-test-redis
+    command: redis-server
+    # No ports exposed - all access via Docker network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  # Init Container (Test) - Runs migrations before tests start
+  init:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.test
+    container_name: bifrost-docs-test-init
+    environment:
+      BIFROST_DOCS_DATABASE_URL: postgresql+asyncpg://bifrost_docs:bifrost_docstest@pgbouncer:5432/bifrost_docs_test
+      BIFROST_DOCS_DATABASE_URL_SYNC: postgresql://bifrost_docs:bifrost_docstest@pgbouncer:5432/bifrost_docs_test
+      BIFROST_DOCS_REDIS_URL: redis://redis:6379/0
+      BIFROST_DOCS_SECRET_KEY: test-secret-key-for-e2e-testing-must-be-32-chars
+      BIFROST_DOCS_ENVIRONMENT: testing
+    volumes:
+      - ./api/src:/app/src:ro
+      - ./api/alembic:/app/alembic:ro
+      - ./api/alembic.ini:/app/alembic.ini:ro
+      - ./api/scripts:/app/scripts:ro
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+
+  # FastAPI Application (Test) - Only started for E2E tests
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: bifrost-docs-test-api
+    environment:
+      # Database via PgBouncer (matches production architecture)
+      BIFROST_DOCS_DATABASE_URL: postgresql+asyncpg://bifrost_docs:bifrost_docstest@pgbouncer:5432/bifrost_docs_test
+      BIFROST_DOCS_DATABASE_URL_SYNC: postgresql://bifrost_docs:bifrost_docstest@pgbouncer:5432/bifrost_docs_test
+      BIFROST_DOCS_REDIS_URL: redis://redis:6379/0
+      BIFROST_DOCS_SECRET_KEY: test-secret-key-for-e2e-testing-must-be-32-chars
+      BIFROST_DOCS_ENVIRONMENT: testing
+    # No ports exposed - all access via Docker network (test-runner connects to api:8000)
+    volumes:
+      - ./api/src:/app/src:ro
+      - ./api/alembic:/app/alembic:ro
+      - ./api/alembic.ini:/app/alembic.ini:ro
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    profiles:
+      - e2e  # Only start in E2E mode
+
+  # Test Runner - Executes pytest inside container with all dependencies
+  test-runner:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.test
+    container_name: bifrost-docs-test-runner
+    environment:
+      # Database via PgBouncer (matches production architecture)
+      BIFROST_DOCS_DATABASE_URL: postgresql+asyncpg://bifrost_docs:bifrost_docstest@pgbouncer:5432/bifrost_docs_test
+      BIFROST_DOCS_DATABASE_URL_SYNC: postgresql://bifrost_docs:bifrost_docstest@pgbouncer:5432/bifrost_docs_test
+      BIFROST_DOCS_REDIS_URL: redis://redis:6379/0
+      BIFROST_DOCS_SECRET_KEY: test-secret-key-for-e2e-testing-must-be-32-chars
+      BIFROST_DOCS_ENVIRONMENT: testing
+      # For E2E tests, point to the API container
+      TEST_API_URL: http://api:8000
+      PYTHONPATH: /app
+    volumes:
+      - ./api/src:/app/src:ro
+      - ./api/scripts:/app/scripts:ro
+      - ./api/tests:/app/tests:ro
+      - ./api/alembic:/app/alembic:ro
+      - ./api/alembic.ini:/app/alembic.ini:ro
+      - ./api/pyproject.toml:/app/pyproject.toml:ro
+    working_dir: /app
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    # Default command runs all tests
+    command: ["pytest", "tests/", "-v"]
+    profiles:
+      - test  # Only start when running tests
+
+  # =============================================================================
+  # Client E2E Testing Services (started with --profile client)
+  # =============================================================================
+
+  # Client frontend (Vite dev server)
+  # Serves the React app for Playwright browser tests
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: bifrost-docs-test-client
+    environment:
+      # API_URL and WS_URL are used by Vite's proxy config (server-side)
+      API_URL: http://api:8000
+      WS_URL: ws://api:8000
+    volumes:
+      - ./client/src:/app/src:ro
+      - ./client/public:/app/public:ro
+      - ./client/index.html:/app/index.html:ro
+      - ./client/vite.config.ts:/app/vite.config.ts:ro
+      - ./client/tailwind.config.ts:/app/tailwind.config.ts:ro
+      - ./client/tsconfig.json:/app/tsconfig.json:ro
+      - ./client/components.json:/app/components.json:ro
+      - ./client/postcss.config.js:/app/postcss.config.js:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    profiles:
+      - client  # Only start when --profile client is used

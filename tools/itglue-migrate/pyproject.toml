@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "itglue-migrate"
+version = "1.0.0"
+description = "IT Glue to BifrostDocs Migration Tool"
+requires-python = ">=3.11"
+dependencies = [
+    # HTTP Client
+    "httpx>=0.27.0",
+    # CLI
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    # Validation
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pyright>=1.1.350",
+    "ruff>=0.3.0",
+]
+
+[project.scripts]
+itglue-migrate = "itglue_migrate.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "basic"
+pythonVersion = "3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["itglue_migrate"]

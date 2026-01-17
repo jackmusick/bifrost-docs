@@ -1,0 +1,111 @@
+name: bifrost-docs-dev
+
+# Development overrides for docker-compose.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# This file adds development-specific configuration:
+# - Hot reload with volume mounts for live code changes
+# - Development-specific Dockerfiles (dependencies only)
+# - Debug port for VS Code attachment
+# - Management UI ports for MinIO
+# - Development environment defaults
+
+services:
+  # PostgreSQL - development password default
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bifrost_docsdev}
+    ports:
+      - "5433:5432" # Different port to avoid conflicts with other projects
+  # MinIO - expose console port for debugging
+  minio:
+    environment:
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-bifrost_docsdev}
+    # ports:
+    #   - "9000:9000" # S3 API
+    #   - "9001:9001" # Web Console for debugging
+
+  # MinIO Init - development password default
+  minio-init:
+    environment:
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-bifrost_docsdev}
+
+  # PgBouncer - development password + expose port
+  pgbouncer:
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-bifrost_docsdev}
+
+  # Init container - build from local Dockerfile + development password default
+  init:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      BIFROST_DOCS_SECRET_KEY: ${BIFROST_DOCS_SECRET_KEY:-dev-secret-key-change-in-production-must-be-32-chars}
+      BIFROST_DOCS_DATABASE_URL: postgresql+asyncpg://bifrost_docs:${POSTGRES_PASSWORD:-bifrost_docsdev}@pgbouncer:5432/bifrost_docs
+      BIFROST_DOCS_DATABASE_URL_SYNC: postgresql://bifrost_docs:${POSTGRES_PASSWORD:-bifrost_docsdev}@pgbouncer:5432/bifrost_docs
+    volumes:
+      - ./api/alembic:/app/alembic:ro
+      - ./api/alembic.ini:/app/alembic.ini:ro
+      - ./api/scripts:/app/scripts:ro
+
+  # API with hot reload for development - build from local Dockerfile
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      BIFROST_DOCS_ENVIRONMENT: development
+      BIFROST_DOCS_DEBUG: ${BIFROST_DOCS_DEBUG:-true}
+      BIFROST_DOCS_SECRET_KEY: ${BIFROST_DOCS_SECRET_KEY:-dev-secret-key-change-in-production-must-be-32-chars}
+      BIFROST_DOCS_DATABASE_URL: postgresql+asyncpg://bifrost_docs:${POSTGRES_PASSWORD:-bifrost_docsdev}@pgbouncer:5432/bifrost_docs
+      BIFROST_DOCS_DATABASE_URL_SYNC: postgresql://bifrost_docs:${POSTGRES_PASSWORD:-bifrost_docsdev}@pgbouncer:5432/bifrost_docs
+      BIFROST_DOCS_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-bifrost_docsdev}
+      # Debugging (optional - enables debugpy)
+      ENABLE_DEBUG: ${ENABLE_DEBUG:-false}
+    volumes:
+      - ./api/src:/app/src:ro
+      - ./api/alembic:/app/alembic:ro
+      - ./api/alembic.ini:/app/alembic.ini:ro
+    command: >
+      sh -c "if [ \"$$ENABLE_DEBUG\" = \"true\" ]; then
+               echo 'Starting with debugpy - waiting for VS Code to attach on port 5678...' &&
+               python -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src;
+             else
+               uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src;
+             fi"
+
+  # Worker with hot reload for development
+  worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      BIFROST_DOCS_SECRET_KEY: ${BIFROST_DOCS_SECRET_KEY:-dev-secret-key-change-in-production-must-be-32-chars}
+      BIFROST_DOCS_DATABASE_URL: postgresql+asyncpg://bifrost_docs:${POSTGRES_PASSWORD:-bifrost_docsdev}@pgbouncer:5432/bifrost_docs
+      BIFROST_DOCS_REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./api/src:/app/src:ro
+    command: arq src.worker.WorkerSettings --watch ./src
+
+  # Client with hot reload for development
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+      target: "" # Clear the production target from base compose file
+    environment:
+      API_URL: http://api:8000
+    volumes:
+      - ./client/src:/app/src
+      - ./client/public:/app/public
+      - ./client/index.html:/app/index.html
+      - ./client/vite.config.ts:/app/vite.config.ts
+      - ./client/tsconfig.json:/app/tsconfig.json
+      - ./client/tsconfig.app.json:/app/tsconfig.app.json
+      - ./client/tsconfig.node.json:/app/tsconfig.node.json
+      - ./client/postcss.config.js:/app/postcss.config.js
+      - ./client/tailwind.config.js:/app/tailwind.config.js
+      - ./client/components.json:/app/components.json

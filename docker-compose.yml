@@ -1,0 +1,214 @@
+name: bifrost-docs
+
+# Bifrost Docs Docker Stack - Production Configuration
+#
+# Usage:
+#   docker compose up              # Start all services
+#   docker compose up -d           # Start in background
+#   docker compose logs -f api     # Follow API logs
+#
+# For development with hot reload:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Required environment variables:
+#   BIFROST_DOCS_SECRET_KEY   - 32+ char secret for JWT signing and secret encryption
+#   POSTGRES_PASSWORD   - PostgreSQL password
+#
+# The BIFROST_DOCS_SECRET_KEY is critical - it's used for:
+#   - JWT token signing (HS256)
+#   - Fernet encryption of passwords stored in PostgreSQL
+#   - Must be consistent across all services
+#   - Changing it will invalidate all existing tokens and encrypted data
+
+services:
+  # PostgreSQL Database (with pgvector extension for semantic search)
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: bifrost-docs-postgres
+    environment:
+      POSTGRES_DB: bifrost_docs
+      POSTGRES_USER: bifrost_docs
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - bifrost_docspostgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bifrost_docs -d bifrost_docs"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MinIO (S3-compatible object storage for attachments)
+  minio:
+    image: minio/minio:latest
+    container_name: bifrost-docs-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    # Ports only exposed in docker-compose.dev.yml
+    volumes:
+      - bifrost_docsminio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MinIO Initialization - Creates required buckets
+  minio-init:
+    image: minio/mc:latest
+    container_name: bifrost-docs-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb myminio/bifrost-docs --ignore-existing;
+      echo 'Bucket created successfully';
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
+  # Redis (Sessions & Cache)
+  redis:
+    image: redis:7-alpine
+    container_name: bifrost-docs-redis
+    command: redis-server --appendonly yes
+    # Port only exposed in docker-compose.dev.yml
+    volumes:
+      - bifrost_docsredis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # PgBouncer - Connection Pooler for PostgreSQL
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: bifrost-docs-pgbouncer
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: bifrost_docs
+      DB_USER: bifrost_docs
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 20
+      MIN_POOL_SIZE: 5
+      RESERVE_POOL_SIZE: 5
+      AUTH_TYPE: plain
+    # Port only exposed in docker-compose.dev.yml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-h",
+          "localhost",
+          "-p",
+          "5432",
+          "-U",
+          "bifrost_docs",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Init Container - Runs migrations before API starts
+  init:
+    image: jackmusick/bifrost-docs-api:latest
+    container_name: bifrost-docs-init
+    environment:
+      BIFROST_DOCS_SECRET_KEY: ${BIFROST_DOCS_SECRET_KEY:?BIFROST_DOCS_SECRET_KEY is required (32+ chars)}
+      BIFROST_DOCS_DATABASE_URL: postgresql+asyncpg://bifrost_docs:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:5432/bifrost_docs
+      BIFROST_DOCS_DATABASE_URL_SYNC: postgresql://bifrost_docs:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:5432/bifrost_docs
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    command: python -m scripts.init_container
+
+  # FastAPI Application
+  api:
+    image: jackmusick/bifrost-docs-api:latest
+    container_name: bifrost-docs-api
+    environment:
+      # Core
+      BIFROST_DOCS_ENVIRONMENT: ${BIFROST_DOCS_ENVIRONMENT:-production}
+      BIFROST_DOCS_DEBUG: ${BIFROST_DOCS_DEBUG:-false}
+      BIFROST_DOCS_SECRET_KEY: ${BIFROST_DOCS_SECRET_KEY:?BIFROST_DOCS_SECRET_KEY is required (32+ chars)}
+      # Database (via PgBouncer for connection pooling)
+      BIFROST_DOCS_DATABASE_URL: postgresql+asyncpg://bifrost_docs:${POSTGRES_PASSWORD}@pgbouncer:5432/bifrost_docs
+      BIFROST_DOCS_DATABASE_URL_SYNC: postgresql://bifrost_docs:${POSTGRES_PASSWORD}@pgbouncer:5432/bifrost_docs
+      # Redis
+      BIFROST_DOCS_REDIS_URL: redis://redis:6379/0
+      # CORS (only needed if API is accessed directly, not through proxy)
+      BIFROST_DOCS_CORS_ORIGINS: ${BIFROST_DOCS_CORS_ORIGINS:-http://localhost:3000}
+      # JWT (optional, has defaults)
+      BIFROST_DOCS_ACCESS_TOKEN_EXPIRE_MINUTES: ${BIFROST_DOCS_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      BIFROST_DOCS_REFRESH_TOKEN_EXPIRE_DAYS: ${BIFROST_DOCS_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      # MFA (optional, has defaults)
+      BIFROST_DOCS_MFA_ENABLED: ${BIFROST_DOCS_MFA_ENABLED:-true}
+      BIFROST_DOCS_MFA_TOTP_ISSUER: ${BIFROST_DOCS_MFA_TOTP_ISSUER:-BifrostDocs}
+      # WebAuthn/Passkeys
+      BIFROST_DOCS_WEBAUTHN_ORIGIN: ${BIFROST_DOCS_WEBAUTHN_ORIGIN:-http://localhost:3000}
+      # S3/MinIO Storage
+      BIFROST_DOCS_S3_ENDPOINT: http://minio:9000
+      BIFROST_DOCS_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      BIFROST_DOCS_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      BIFROST_DOCS_S3_BUCKET: ${BIFROST_DOCS_S3_BUCKET:-bifrost-docs}
+      BIFROST_DOCS_S3_REGION: us-east-1
+      # OpenAI (for vector search)
+      BIFROST_DOCS_OPENAI_API_KEY: ${BIFROST_DOCS_OPENAI_API_KEY:-}
+      BIFROST_DOCS_OPENAI_EMBEDDING_MODEL: ${BIFROST_DOCS_OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+    # Note: API port not exposed - access via client proxy at http://localhost:3000
+    # Debug port (5678) only exposed in docker-compose.dev.yml
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+
+  # arq Worker (processes indexing queue)
+  worker:
+    image: jackmusick/bifrost-docs-api:latest
+    container_name: bifrost-docs-worker
+    environment:
+      BIFROST_DOCS_SECRET_KEY: ${BIFROST_DOCS_SECRET_KEY:?BIFROST_DOCS_SECRET_KEY is required (32+ chars)}
+      BIFROST_DOCS_DATABASE_URL: postgresql+asyncpg://bifrost_docs:${POSTGRES_PASSWORD}@pgbouncer:5432/bifrost_docs
+      BIFROST_DOCS_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    command: arq src.worker.WorkerSettings
+
+  # Frontend (Vite/React)
+  client:
+    image: jackmusick/bifrost-docs-client:latest
+    container_name: bifrost-docs-client
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  bifrost_docspostgres_data:
+  bifrost_docsredis_data:
+  bifrost_docsminio_data:

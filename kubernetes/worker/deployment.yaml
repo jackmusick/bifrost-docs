@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bifrost-docs-worker
+  namespace: bifrost-docs
+  labels:
+    app.kubernetes.io/name: bifrost-docs-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: bifrost-docs
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bifrost-docs-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bifrost-docs-worker
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/part-of: bifrost-docs
+    spec:
+      containers:
+        - name: worker
+          image: jackmusick/bifrost-docs-api:latest
+          command: ["arq", "src.worker.WorkerSettings"]
+          envFrom:
+            - configMapRef:
+                name: bifrost-docs-config
+            - secretRef:
+                name: bifrost-docs-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          # Worker doesn't have HTTP endpoint, use exec probe
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import redis; r = redis.from_url('${BIFROST_DOCS_REDIS_URL}'); r.ping()"
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+      # Run as non-root user (matches Dockerfile)
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000

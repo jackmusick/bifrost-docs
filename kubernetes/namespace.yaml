@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bifrost-docs
+  labels:
+    app.kubernetes.io/name: bifrost-docs
+    app.kubernetes.io/part-of: bifrost-docs

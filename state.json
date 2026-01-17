@@ -1,0 +1,31 @@
+{
+  "api_url": "http://localhost:3000",
+  "completed": {
+    "Configuration Types": [],
+    "Configurations": [],
+    "Custom Asset Types": [],
+    "Custom Assets": [],
+    "Documents": [],
+    "Locations": [],
+    "Organizations": [],
+    "Passwords": [],
+    "Relationships": []
+  },
+  "current_phase": null,
+  "export_path": "/Users/jack/Downloads/export",
+  "failed": {
+    "Configuration Types": [],
+    "Configurations": [],
+    "Custom Asset Types": [],
+    "Custom Assets": [],
+    "Documents": [],
+    "Locations": [],
+    "Organizations": [],
+    "Passwords": [],
+    "Relationships": []
+  },
+  "last_update_time": "2026-01-14T00:42:38.281535",
+  "start_time": "2026-01-14T00:42:38.276663",
+  "version": 1,
+  "warnings": []
+}
