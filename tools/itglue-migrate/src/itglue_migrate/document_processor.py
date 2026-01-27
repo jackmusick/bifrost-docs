@@ -197,7 +197,8 @@ class DocumentProcessor:
         image_srcs = self._extract_image_paths(html)
         if not image_srcs:
             logger.debug(f"No images found in document {doc_id}")
-            return html, warnings
+            markdown = self._html_to_markdown(html)
+            return markdown, warnings
 
         # Step 3: Find document folder for resolving image paths
         doc_folder = self._find_document_folder(doc_id)
@@ -206,7 +207,8 @@ class DocumentProcessor:
                 f"Document folder not found for ID {doc_id}, "
                 "cannot resolve image paths"
             )
-            return html, warnings
+            markdown = self._html_to_markdown(html)
+            return markdown, warnings
 
         # Step 4: Upload each image and build replacement map
         replacements: dict[str, str] = {}
@@ -230,7 +232,9 @@ class DocumentProcessor:
                 f"Document {doc_id}: replaced {len(replacements)} image URLs"
             )
 
-        return html, warnings
+        # Step 6: Convert HTML to markdown
+        markdown = self._html_to_markdown(html)
+        return markdown, warnings
 
     def _load_document_html(self, doc_id: str, doc_name: str) -> str | None:
         """Load HTML content from the export documents folder.
@@ -479,21 +483,174 @@ class DocumentProcessor:
     def _clean_html(self, html: str) -> str:
         """Clean HTML content for tiptap compatibility.
 
-        Removes <br> tags inside <li> elements that cause list items
-        to break across lines in the tiptap editor.
+        - Removes <br> tags inside <li> elements that cause list items
+          to break across lines in the tiptap editor.
+        - Converts IT Glue step-section divs to proper ordered lists.
+        - Cleans up Word-exported HTML with deeply nested formatting tags.
 
         Args:
             html: Original HTML content.
 
         Returns:
-            Cleaned HTML with <br> tags removed from inside list items.
+            Cleaned HTML.
         """
         # Remove <br> and <br/> tags that appear at the end of <li> content
-        # Pattern: <br> or <br/> followed by </li>
         html = re.sub(r"<br\s*/?>\s*(?=</li>)", "", html, flags=re.IGNORECASE)
         # Pattern: <br> or <br/> followed by nested <ul> or <ol>
         html = re.sub(r"<br\s*/?>\s*(?=<[uo]l>)", "", html, flags=re.IGNORECASE)
+
+        # Convert IT Glue step sections to ordered lists
+        html = self._clean_step_sections(html)
+
+        # Clean up Word-exported formatting
+        html = self._clean_word_formatting(html)
+
         return html
+
+    def _clean_step_sections(self, html: str) -> str:
+        """Convert IT Glue step-section divs to proper ordered lists.
+
+        IT Glue format:
+        <div class='step-section'>
+            <span class='step-number'>1.</span>
+            <div class='step scrollable'>
+                <div><div>Step content here</div></div>
+            </div>
+        </div>
+
+        Converts to:
+        <ol><li>Step content here</li></ol>
+        """
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Find all step-section divs
+        step_sections = soup.find_all('div', class_='step-section')
+
+        if not step_sections:
+            return html
+
+        # Group consecutive step sections
+        groups: list[list] = []
+        current_group: list = []
+
+        for section in step_sections:
+            # Check if this step follows the previous one
+            if current_group:
+                prev = current_group[-1]
+                # If they're siblings (consecutive), add to group
+                next_sib = prev.find_next_sibling()
+                if next_sib == section or (next_sib and next_sib.find_next_sibling() == section):
+                    current_group.append(section)
+                else:
+                    groups.append(current_group)
+                    current_group = [section]
+            else:
+                current_group.append(section)
+
+        if current_group:
+            groups.append(current_group)
+
+        # Convert each group to an ordered list
+        for group in groups:
+            ol = soup.new_tag('ol')
+
+            for section in group:
+                step_div = section.find('div', class_='step')
+                if step_div:
+                    li = soup.new_tag('li')
+                    # Get the content, unwrapping nested divs
+                    for child in list(step_div.children):
+                        if hasattr(child, 'name') and child.name == 'div':
+                            # Unwrap nested div content
+                            for grandchild in list(child.children):
+                                if hasattr(grandchild, 'extract'):
+                                    li.append(grandchild.extract())
+                                else:
+                                    li.append(grandchild)
+                        else:
+                            if hasattr(child, 'extract'):
+                                li.append(child.extract())
+                            else:
+                                li.append(child)
+                    ol.append(li)
+
+            # Replace first step-section with the ol
+            group[0].replace_with(ol)
+
+            # Remove remaining step-sections in this group
+            for section in group[1:]:
+                section.decompose()
+
+        return str(soup)
+
+    def _clean_word_formatting(self, html: str) -> str:
+        """Clean up Word-exported HTML with deeply nested formatting tags.
+
+        Removes redundant <span><font> wrappers and consolidates paragraphs.
+        """
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Unwrap all <font> tags (preserve content)
+        for font in soup.find_all('font'):
+            font.unwrap()
+
+        # Unwrap empty <span> tags or those only containing whitespace
+        for span in soup.find_all('span'):
+            # If span only contains text or is empty, unwrap it
+            if not span.find_all():  # No child tags
+                span.unwrap()
+
+        # Remove empty paragraphs (just whitespace or <br>)
+        for p in soup.find_all('p'):
+            text = p.get_text(strip=True)
+            if not text:
+                # Check if it only contains <br>
+                children = list(p.children)
+                if all(
+                    (hasattr(c, 'name') and getattr(c, 'name', None) == 'br') or
+                    (isinstance(c, str) and not c.strip())
+                    for c in children
+                ):
+                    p.decompose()
+
+        return str(soup)
+
+    def _html_to_markdown(self, html: str) -> str:
+        """Convert cleaned HTML to markdown for storage.
+
+        Args:
+            html: Cleaned HTML content with images already processed.
+
+        Returns:
+            Markdown-formatted content.
+        """
+        from markdownify import markdownify as md
+
+        markdown = md(
+            html,
+            heading_style="atx",
+            bullets="-",
+            code_language="",
+            strip=["script", "style"],
+            escape_asterisks=False,
+            escape_underscores=False,
+        )
+        # Clean HTML entities
+        markdown = (
+            markdown.replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", '"')
+        )
+        # Remove excessive blank lines
+        while "\n\n\n" in markdown:
+            markdown = markdown.replace("\n\n\n", "\n\n")
+        return markdown.strip()
 
     async def upload_entity_attachments(
         self,

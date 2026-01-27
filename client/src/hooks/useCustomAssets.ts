@@ -375,7 +375,7 @@ export function useUpdateCustomAsset(
   });
 }
 
-export function useDeleteCustomAsset(orgId: string, typeId: string) {
+export function useDeleteCustomAsset(orgId: string, typeId: string, onDeleted?: (id: string) => void) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -383,11 +383,31 @@ export function useDeleteCustomAsset(orgId: string, typeId: string) {
       await api.delete(
         `/api/organizations/${orgId}/custom-asset-types/${typeId}/assets/${assetId}`
       );
+      return assetId;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["custom-assets", orgId, typeId],
+    onSuccess: (_data, assetId) => {
+      // Navigate FIRST (if callback provided) to unmount detail page before cache removal
+      // This prevents the detail page query from refetching a deleted resource
+      onDeleted?.(assetId);
+
+      // Remove detail query from cache
+      queryClient.removeQueries({
+        queryKey: ["custom-assets", orgId, typeId, assetId],
       });
+      // Invalidate ONLY list queries (4th element is object), not detail queries (4th element is string)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            key[0] === "custom-assets" &&
+            key[1] === orgId &&
+            key[2] === typeId &&
+            (key.length === 3 || typeof key[3] === "object")
+          );
+        },
+      });
+      // Invalidate sidebar to update counts
+      queryClient.invalidateQueries({ queryKey: ["sidebar", orgId] });
     },
   });
 }

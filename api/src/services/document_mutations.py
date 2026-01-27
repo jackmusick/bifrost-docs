@@ -1,4 +1,5 @@
 """Document mutation service with Diataxis framework support."""
+import json
 import logging
 from typing import Literal
 
@@ -180,7 +181,7 @@ class DocumentMutationService:
         original_content: str,
         document_name: str,
         user_instruction: str,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str | None]:
         """
         Generate cleaned and restructured content.
 
@@ -192,7 +193,7 @@ class DocumentMutationService:
             user_instruction: User's instruction (e.g., "clean this up")
 
         Returns:
-            Tuple of (cleaned_content, summary_of_changes)
+            Tuple of (cleaned_content, summary_of_changes, suggested_name)
         """
         # Classify document type
         doc_type = classify_document_type(original_content, document_name, user_instruction)
@@ -210,7 +211,14 @@ This document should be structured as a {doc_type.upper()}:
 - Explanation: Understanding-oriented, clarify concepts
 
 Apply appropriate structure, fix formatting issues, improve clarity, and ensure consistency.
-Return ONLY the cleaned markdown content, no explanations."""
+
+Return your response as JSON with this exact structure:
+{{"content": "the cleaned markdown content here", "suggested_title": "A Clear Descriptive Title"}}
+
+IMPORTANT:
+- suggested_title: A concise, descriptive title in title case
+- content: The cleaned markdown body. Do NOT include an H1 heading with the title - the title is stored separately. Start with H2 headings or body text.
+- PRESERVE ALL IMAGES: Keep all existing ![image](url) markdown images. Place them in relevant locations within the restructured content. Never remove images."""
 
         user_prompt = f"""Document Name: {document_name}
 Document Type: {doc_type}
@@ -219,13 +227,14 @@ User Instruction: {user_instruction}
 Original Content:
 {original_content}
 
-Please clean up this document:
-1. Fix any formatting issues (numbered lists, headings, code blocks)
+Clean up this document:
+1. Fix formatting issues (lists, headings, code blocks)
 2. Apply {doc_type} structure from Diataxis framework
 3. Improve clarity and readability
-4. Ensure consistent markdown formatting
+4. Suggest a better title if appropriate
+5. KEEP ALL IMAGES - preserve every ![image](url) and place them appropriately in the content
 
-Return the cleaned content in markdown format."""
+Return valid JSON with "content" (no H1 title heading) and "suggested_title" fields."""
 
         messages = [
             LLMMessage(role=Role.SYSTEM, content=system_prompt),
@@ -249,7 +258,37 @@ Return the cleaned content in markdown format."""
             )
             raise
 
+        # Parse JSON response - LLM may wrap in markdown code blocks
+        suggested_name: str | None = None
+        json_content = cleaned_content.strip()
+
+        # Strip markdown code fences if present
+        if json_content.startswith("```"):
+            # Remove opening fence (```json or ```)
+            first_newline = json_content.find("\n")
+            if first_newline != -1:
+                json_content = json_content[first_newline + 1:]
+            # Remove closing fence
+            if json_content.endswith("```"):
+                json_content = json_content[:-3].strip()
+
+        try:
+            result = json.loads(json_content)
+            cleaned_content = result.get("content", "")
+            suggested_name = result.get("suggested_title")
+            logger.info(
+                f"Parsed JSON response for '{document_name}', "
+                f"suggested_title: {suggested_name[:50] if suggested_name else None}..."
+            )
+        except json.JSONDecodeError as e:
+            # Fallback: treat entire response as content, no title suggestion
+            logger.warning(
+                f"Failed to parse JSON response for '{document_name}': {e}. "
+                f"Raw content starts with: {cleaned_content[:100]}..."
+            )
+            suggested_name = None
+
         # Generate summary
         summary = f"Restructured as {doc_type}, fixed formatting, improved clarity"
 
-        return cleaned_content, summary
+        return cleaned_content, summary, suggested_name

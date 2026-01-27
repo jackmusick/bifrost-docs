@@ -550,4 +550,9 @@ async def batch_toggle_passwords(
         },
     )
 
+    # Update search index for each affected password
+    # The worker will index if enabled, remove from index if disabled
+    for password_id in password_ids:
+        await index_entity_for_search(db, "password", password_id, org_id)
+
     return BatchToggleResponse(updated_count=result.rowcount)

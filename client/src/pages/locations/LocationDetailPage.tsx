@@ -39,7 +39,10 @@ export function LocationDetailPage() {
 
   const { data: location, isLoading } = useLocation(orgId!, id!);
   const updateLocation = useUpdateLocation(orgId!, id!);
-  const deleteLocation = useDeleteLocation(orgId!);
+  const deleteLocation = useDeleteLocation(orgId!, () => {
+    // Navigate in onSuccess callback BEFORE cache removal to prevent stale query refetch
+    navigate(`/org/${orgId}/locations`);
+  });
 
   // Memoize initial data before any early returns
   const initialData = useMemo((): LocationFormValues => {
@@ -89,7 +92,7 @@ export function LocationDetailPage() {
     try {
       await deleteLocation.mutateAsync(id);
       toast.success("Location deleted successfully");
-      navigate(`/org/${orgId}/locations`);
+      // Navigation already happened in onSuccess callback
     } catch {
       toast.error("Failed to delete location");
     }

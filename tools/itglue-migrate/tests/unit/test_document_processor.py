@@ -533,7 +533,8 @@ class TestCleanHtml:
 
         result = processor._clean_html(html)
 
-        assert result == "<p>Line 1<br>Line 2</p>"
+        # BeautifulSoup normalizes <br> to <br/>, accept either
+        assert result in ("<p>Line 1<br>Line 2</p>", "<p>Line 1<br/>Line 2</p>")
 
     def test_preserves_br_in_middle_of_list_item(
         self, processor: DocumentProcessor
@@ -544,7 +545,11 @@ class TestCleanHtml:
         result = processor._clean_html(html)
 
         # <br> in the middle (not immediately before </li>) should be preserved
-        assert result == "<ul><li>Line 1<br>Line 2</li></ul>"
+        # BeautifulSoup normalizes <br> to <br/>, accept either
+        assert result in (
+            "<ul><li>Line 1<br>Line 2</li></ul>",
+            "<ul><li>Line 1<br/>Line 2</li></ul>",
+        )
 
     def test_case_insensitive_br_tags(
         self, processor: DocumentProcessor
@@ -589,6 +594,192 @@ class TestCleanHtml:
         assert "<br></li>" not in result
         assert "<br>\n</li>" not in result
         assert "<br>\n<ul>" not in result
+
+
+class TestCleanStepSections:
+    """Test _clean_step_sections method."""
+
+    def test_converts_single_step_section(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test converting a single step-section to ordered list."""
+        html = """<div class='step-section'>
+            <span class='step-number'>1.</span>
+            <div class='step scrollable'>
+                <div><div>First step content</div></div>
+            </div>
+        </div>"""
+
+        result = processor._clean_step_sections(html)
+
+        assert "<ol>" in result
+        assert "<li>" in result
+        assert "First step content" in result
+        assert "step-section" not in result
+        assert "step-number" not in result
+
+    def test_converts_multiple_consecutive_step_sections(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test converting multiple consecutive step-sections to single ordered list."""
+        html = """<div class='step-section'>
+            <span class='step-number'>1.</span>
+            <div class='step scrollable'><div>Step one</div></div>
+        </div>
+        <div class='step-section'>
+            <span class='step-number'>2.</span>
+            <div class='step scrollable'><div>Step two</div></div>
+        </div>
+        <div class='step-section'>
+            <span class='step-number'>3.</span>
+            <div class='step scrollable'><div>Step three</div></div>
+        </div>"""
+
+        result = processor._clean_step_sections(html)
+
+        # Should have one ordered list with three items
+        assert result.count("<ol>") == 1
+        assert result.count("<li>") == 3
+        assert "Step one" in result
+        assert "Step two" in result
+        assert "Step three" in result
+
+    def test_preserves_html_without_step_sections(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test that HTML without step-sections is preserved."""
+        html = "<p>Regular paragraph content</p><ul><li>Item</li></ul>"
+
+        result = processor._clean_step_sections(html)
+
+        assert result == html
+
+    def test_handles_empty_step_div(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test handling step-section with empty step div."""
+        html = """<div class='step-section'>
+            <span class='step-number'>1.</span>
+            <div class='step scrollable'></div>
+        </div>"""
+
+        result = processor._clean_step_sections(html)
+
+        # Should still create the ol structure
+        assert "<ol>" in result
+
+    def test_unwraps_nested_divs_in_step_content(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test that nested divs inside step content are unwrapped."""
+        html = """<div class='step-section'>
+            <span class='step-number'>1.</span>
+            <div class='step scrollable'>
+                <div><div><p>Nested paragraph</p></div></div>
+            </div>
+        </div>"""
+
+        result = processor._clean_step_sections(html)
+
+        assert "<p>Nested paragraph</p>" in result
+        assert "<li>" in result
+
+
+class TestCleanWordFormatting:
+    """Test _clean_word_formatting method."""
+
+    def test_unwraps_font_tags(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test that font tags are unwrapped, preserving content."""
+        html = "<p><font face='Arial'>Text content</font></p>"
+
+        result = processor._clean_word_formatting(html)
+
+        assert "<font" not in result
+        assert "Text content" in result
+        assert "<p>" in result
+
+    def test_unwraps_empty_span_tags(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test that empty span tags are unwrapped."""
+        html = "<p><span>Simple text</span></p>"
+
+        result = processor._clean_word_formatting(html)
+
+        # Span with only text should be unwrapped
+        assert "Simple text" in result
+
+    def test_preserves_span_with_child_elements(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test that span tags with child elements are preserved."""
+        html = "<p><span><strong>Bold text</strong></span></p>"
+
+        result = processor._clean_word_formatting(html)
+
+        # Span with child tags should be preserved
+        assert "<strong>Bold text</strong>" in result
+
+    def test_removes_empty_paragraphs(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test that empty paragraphs are removed."""
+        html = "<p>Content</p><p></p><p>More content</p>"
+
+        result = processor._clean_word_formatting(html)
+
+        assert "Content" in result
+        assert "More content" in result
+        # Empty paragraph should be removed
+        assert "<p></p>" not in result
+
+    def test_removes_paragraphs_with_only_br(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test that paragraphs containing only br tags are removed."""
+        html = "<p>Content</p><p><br></p><p>More</p>"
+
+        result = processor._clean_word_formatting(html)
+
+        assert "Content" in result
+        assert "More" in result
+
+    def test_removes_paragraphs_with_whitespace_only(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test that paragraphs with only whitespace are removed."""
+        html = "<p>Content</p><p>   </p><p>More</p>"
+
+        result = processor._clean_word_formatting(html)
+
+        assert "Content" in result
+        assert "More" in result
+
+    def test_handles_deeply_nested_word_formatting(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test cleaning deeply nested Word-style formatting."""
+        html = """<p><span><font face='Calibri'><span><font size='3'>
+            Actual content here
+        </font></span></font></span></p>"""
+
+        result = processor._clean_word_formatting(html)
+
+        # Should unwrap all font tags and empty spans
+        assert "<font" not in result
+        assert "Actual content here" in result
+
+    def test_preserves_paragraphs_with_content(
+        self, processor: DocumentProcessor
+    ) -> None:
+        """Test that paragraphs with actual content are preserved."""
+        html = "<p>Keep this paragraph</p>"
+
+        result = processor._clean_word_formatting(html)
+
+        assert "<p>Keep this paragraph</p>" in result
 
 
 class TestUploadImage:
@@ -704,16 +895,17 @@ class TestProcessDocument:
     async def test_process_document_no_images(
         self, processor: DocumentProcessor, temp_dir: Path
     ) -> None:
-        """Test processing document with no images."""
+        """Test processing document with no images returns markdown."""
         doc_dir = temp_dir / "documents" / "DOC-1-100 Test"
         doc_dir.mkdir(parents=True)
         (doc_dir / "index.html").write_text("<html><body>No images</body></html>")
 
-        html, warnings = await processor.process_document(
+        content, warnings = await processor.process_document(
             {"id": "100", "name": "Test"}, "org-uuid"
         )
 
-        assert html == "<html><body>No images</body></html>"
+        # HTML is converted to markdown
+        assert content == "No images"
         assert len(warnings) == 0
 
     @pytest.mark.asyncio

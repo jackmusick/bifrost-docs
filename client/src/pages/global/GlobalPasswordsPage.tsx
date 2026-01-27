@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { KeyRound, ExternalLink, Building2 } from "lucide-react";
 import { type ColumnDef } from "@tanstack/react-table";
@@ -12,9 +12,10 @@ import {
   useGlobalPasswords,
   type GlobalPassword,
 } from "@/hooks/useGlobalData";
+import { PasswordListActions } from "@/components/passwords/PasswordListActions";
 
 // Column definitions for the global passwords table
-const columns: ColumnDef<GlobalPassword>[] = [
+const createColumns = (): ColumnDef<GlobalPassword>[] => [
   {
     accessorKey: "name",
     header: ({ column }) => (
@@ -102,6 +103,21 @@ const columns: ColumnDef<GlobalPassword>[] = [
       </div>
     ),
   },
+  {
+    id: "actions",
+    header: () => null,
+    cell: ({ row }) => (
+      <div className="flex justify-end">
+        <PasswordListActions
+          password={row.original}
+          orgId={row.original.organization_id}
+        />
+      </div>
+    ),
+    size: 130,
+    enableSorting: false,
+    enableHiding: false,
+  },
 ];
 
 // Columns to pin to the left by default
@@ -113,6 +129,8 @@ export function GlobalPasswordsPage() {
     limit: 25,
     offset: 0,
   });
+
+  const columns = useMemo(() => createColumns(), []);
 
   const { data, isLoading, refetch, isRefetching } = useGlobalPasswords(pagination);
 

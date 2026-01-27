@@ -356,20 +356,16 @@ async def _perform_chat(
     try:
         async with get_db_context() as db:
             # Perform hybrid search to get context (combines semantic + text matching)
+            # Always search, even when viewing a document - user may ask about related content
             embeddings_service = get_embeddings_service(db)
 
-            # If we have a current entity, skip search entirely - user is asking about current doc
-            # Otherwise perform search for general queries
-            if current_entity_id and current_entity_type:
+            try:
+                search_results = await embeddings_service.hybrid_search(
+                    db, message, org_ids, limit=10
+                )
+            except Exception as e:
+                logger.error(f"Search for chat context failed: {e}", exc_info=True)
                 search_results = []
-            else:
-                try:
-                    search_results = await embeddings_service.hybrid_search(
-                        db, message, org_ids, limit=10
-                    )
-                except Exception as e:
-                    logger.error(f"Search for chat context failed: {e}", exc_info=True)
-                    search_results = []
 
             # Fetch current entity details if provided and add to search results FIRST
             # (so it appears in citations)

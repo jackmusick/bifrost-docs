@@ -38,13 +38,23 @@ async def index_entity_task(
     This task is queued when entities are created or updated in the API.
     It generates embeddings and stores them in the search index.
 
+    IMPORTANT: Only enabled entities are indexed. If an entity is disabled,
+    it will be removed from the index instead of being indexed.
+
     Args:
         _ctx: arq context (contains redis connection, job info, etc.)
         entity_type: Type of entity (password, configuration, location, document, custom_asset)
         entity_id: Entity UUID as string
         org_id: Organization UUID as string
     """
+    from sqlalchemy import select
+
     from src.core.database import get_db_context
+    from src.models.orm.configuration import Configuration
+    from src.models.orm.custom_asset import CustomAsset
+    from src.models.orm.document import Document
+    from src.models.orm.location import Location
+    from src.models.orm.password import Password
     from src.services.embeddings import get_embeddings_service
     from src.services.llm.factory import is_indexing_enabled
 
@@ -63,6 +73,7 @@ async def index_entity_task(
         raise ValueError(f"Invalid entity_type: {entity_type}")
 
     typed_entity_type = cast(EntityType, entity_type)
+    entity_uuid = UUID(entity_id)
 
     async with get_db_context() as db:
         # Check if indexing is enabled
@@ -70,8 +81,30 @@ async def index_entity_task(
             logger.debug(f"Skipping indexing for {entity_type}/{entity_id} - indexing disabled")
             return
 
-        # Call embeddings service directly (not search_indexing which enqueues)
+        # Check if entity is enabled - only index enabled entities
+        entity_models: dict[str, type] = {
+            "password": Password,
+            "configuration": Configuration,
+            "location": Location,
+            "document": Document,
+            "custom_asset": CustomAsset,
+        }
+        model = entity_models[entity_type]
+        result = await db.execute(select(model.is_enabled).where(model.id == entity_uuid))
+        is_enabled = result.scalar_one_or_none()
+
         embeddings_service = get_embeddings_service(db)
+
+        # If entity is disabled or doesn't exist, remove from index
+        if is_enabled is None or not is_enabled:
+            logger.info(
+                f"Entity {entity_type}/{entity_id} is disabled or not found, removing from index",
+                extra={"entity_type": entity_type, "entity_id": entity_id},
+            )
+            await embeddings_service.delete_index(db, typed_entity_type, entity_uuid)
+            return
+
+        # Entity is enabled - proceed with indexing
         if not await embeddings_service.check_openai_available():
             logger.debug(f"Skipping indexing for {entity_type}/{entity_id} - OpenAI not configured")
             return
@@ -79,7 +112,7 @@ async def index_entity_task(
         await embeddings_service.index_entity(
             db,
             typed_entity_type,
-            UUID(entity_id),
+            entity_uuid,
             UUID(org_id),
         )
 
@@ -244,8 +277,9 @@ async def reindex_task(
                 if model is None:
                     continue
 
-                # Query for entities WITHOUT embeddings (LEFT JOIN + NULL check)
+                # Query for ENABLED entities WITHOUT embeddings (LEFT JOIN + NULL check)
                 # This makes the job naturally resumable - only processes what's missing
+                # Only index enabled entities - disabled ones should not be in the index
                 stmt = (
                     select(model.id, model.organization_id)
                     .outerjoin(
@@ -256,6 +290,7 @@ async def reindex_task(
                         ),
                     )
                     .where(EmbeddingIndex.id.is_(None))
+                    .where(model.is_enabled.is_(True))  # Only index enabled entities
                 )
 
                 if org_uuid is not None:

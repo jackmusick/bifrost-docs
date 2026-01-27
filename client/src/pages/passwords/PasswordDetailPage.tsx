@@ -60,7 +60,10 @@ export function PasswordDetailPage() {
 
   const { data: password, isLoading } = usePassword(orgId!, id!);
   const updatePassword = useUpdatePassword(orgId!, id!);
-  const deletePassword = useDeletePassword(orgId!);
+  const deletePassword = useDeletePassword(orgId!, () => {
+    // Navigate in onSuccess callback BEFORE cache removal to prevent stale query refetch
+    navigate(`/org/${orgId}/passwords`);
+  });
 
   // Memoize initial data before any early returns
   // Note: password and totp_secret are intentionally NOT pre-filled for security
@@ -123,7 +126,7 @@ export function PasswordDetailPage() {
     try {
       await deletePassword.mutateAsync(id);
       toast.success("Password deleted successfully");
-      navigate(`/org/${orgId}/passwords`);
+      // Navigation already happened in onSuccess callback
     } catch {
       toast.error("Failed to delete password");
     }

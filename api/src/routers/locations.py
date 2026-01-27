@@ -436,4 +436,9 @@ async def batch_toggle_locations(
         },
     )
 
+    # Update search index for each affected location
+    # The worker will index if enabled, remove from index if disabled
+    for location_id in location_ids:
+        await index_entity_for_search(db, "location", location_id, org_id)
+
     return BatchToggleResponse(updated_count=result.rowcount)

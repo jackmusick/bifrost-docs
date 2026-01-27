@@ -22,11 +22,12 @@ import {
 import { useDebounce } from "@/hooks/useDebounce";
 import { useColumnPreferences } from "@/hooks/useColumnPreferences";
 import { PasswordForm } from "@/components/passwords/PasswordForm";
+import { PasswordListActions } from "@/components/passwords/PasswordListActions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 
 // Column definitions for the passwords table
-const columns: ColumnDef<Password>[] = [
+const createColumns = (orgId: string): ColumnDef<Password>[] => [
   createSelectionColumn<Password>(),
   {
     accessorKey: "name",
@@ -102,6 +103,18 @@ const columns: ColumnDef<Password>[] = [
     ),
     size: 110,
   },
+  {
+    id: "actions",
+    header: () => null,
+    cell: ({ row }) => (
+      <div className="flex justify-end">
+        <PasswordListActions password={row.original} orgId={orgId} />
+      </div>
+    ),
+    size: 130,
+    enableSorting: false,
+    enableHiding: false,
+  },
 ];
 
 // Columns to pin to the left by default
@@ -123,6 +136,8 @@ export function PasswordsPage() {
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebounce(searchInput, 300);
   const { canEdit } = usePermissions();
+
+  const columns = useMemo(() => createColumns(orgId!), [orgId]);
 
   const batchToggle = useBatchTogglePasswords(orgId!);
 

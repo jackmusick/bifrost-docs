@@ -171,15 +171,34 @@ export function useUpdateDocument(orgId: string, id: string) {
   });
 }
 
-export function useDeleteDocument(orgId: string) {
+export function useDeleteDocument(orgId: string, onDeleted?: (id: string) => void) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (id: string) => {
       await api.delete(`/api/organizations/${orgId}/documents/${id}`);
+      return id;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["documents", orgId] });
+    onSuccess: (_data, id) => {
+      // Navigate FIRST (if callback provided) to unmount detail page before cache removal
+      // This prevents the detail page query from refetching a deleted resource
+      onDeleted?.(id);
+
+      // Remove detail query from cache
+      queryClient.removeQueries({ queryKey: ["documents", orgId, "detail", id] });
+      // Invalidate ONLY list queries (3rd element is NOT "detail"), not detail queries
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            key[0] === "documents" &&
+            key[1] === orgId &&
+            key[2] !== "detail"
+          );
+        },
+      });
+      // Invalidate sidebar to update counts
+      queryClient.invalidateQueries({ queryKey: ["sidebar", orgId] });
     },
   });
 }
@@ -237,6 +256,21 @@ export function useMoveDocument(orgId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents", orgId] });
+    },
+  });
+}
+
+export function useCleanDocument(orgId: string, documentId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.post<{
+        cleaned_content: string;
+        summary: string;
+        suggested_name: string | null;
+      }>(
+        `/api/organizations/${orgId}/documents/${documentId}/clean`
+      );
+      return response.data;
     },
   });
 }

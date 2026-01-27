@@ -27,19 +27,22 @@ export function AppLayout() {
       return {
         id: params.id,
         type: "document" as const,
+        typeId: undefined,
       };
     }
 
-    // Match /org/:orgId/custom-assets/:id or /global/custom-assets/:id
-    if (path.includes("/custom-assets/") && params.id && params.id !== "new") {
+    // Match /org/:orgId/assets/:typeId/:id - custom assets
+    // The URL structure is /assets/:typeId/:id where typeId is the asset type and id is the asset
+    if (path.includes("/assets/") && params.typeId && params.id && params.id !== "new") {
       return {
         id: params.id,
         type: "custom_asset" as const,
+        typeId: params.typeId,
       };
     }
 
     return null;
-  }, [location.pathname, params.id]);
+  }, [location.pathname, params.id, params.typeId]);
 
   // Validate that persisted organization still exists
   useOrgValidation();
@@ -89,6 +92,7 @@ export function AppLayout() {
         initialMessage={chatInitialMessage}
         currentEntityId={currentEntity?.id}
         currentEntityType={currentEntity?.type}
+        currentEntityTypeId={currentEntity?.typeId}
       />
     </div>
   );

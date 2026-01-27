@@ -14,6 +14,7 @@ from typing import Any
 
 from itglue_migrate.api_client import APIError, BifrostDocsClient
 from itglue_migrate.csv_parser import slugify_to_display_name
+from itglue_migrate.document_processor import DocumentProcessor
 from itglue_migrate.progress import Phase, ProgressReporter, SimpleProgressReporter
 from itglue_migrate.state import MigrationState
 
@@ -21,6 +22,22 @@ logger = logging.getLogger(__name__)
 
 # Pattern to match IT Glue document folders: DOC-{org_id}-{doc_id} {name}
 DOC_FOLDER_PATTERN = re.compile(r"^DOC-\d+-(\d+)\s")
+
+
+def _is_content_empty(html_content: str) -> bool:
+    """Check if HTML content is empty after stripping tags.
+
+    Args:
+        html_content: HTML string to check.
+
+    Returns:
+        True if content is empty or whitespace-only after stripping HTML.
+    """
+    if not html_content:
+        return True
+    # Strip HTML tags and check if any text remains
+    text = re.sub(r"<[^>]+>", "", html_content)
+    return not text.strip()
 
 
 def map_archived_to_is_enabled(archived_value: str | None) -> bool:
@@ -1001,6 +1018,16 @@ class EntityImporter:
         # Build folder map to find HTML files and determine folder paths
         folder_map = _build_document_folder_map(documents_path)
 
+        # Create document processor for HTML cleaning and markdown conversion
+        # We use a mock client since we don't need image upload functionality here
+        class _MockClient:
+            pass
+
+        doc_processor = DocumentProcessor(_MockClient(), export_path)  # type: ignore
+
+        # Track seen documents to detect duplicates (org_uuid -> set of lowercase doc names)
+        seen_docs: dict[str, set[str]] = {}
+
         for doc in docs:
             itglue_id = str(doc.get("id", ""))
             doc_name = doc.get("name", "Untitled Document")
@@ -1031,6 +1058,17 @@ class EntityImporter:
                     )
                     continue
 
+                # Check for duplicate document names within the same org
+                doc_name_lower = doc_name.lower()
+                if org_uuid in seen_docs and doc_name_lower in seen_docs[org_uuid]:
+                    self.reporter.warning(
+                        f"Duplicate document '{doc_name}' in organization, skipping"
+                    )
+                    self.reporter.update_progress(skipped=1)
+                    self.state.add_warning(f"Skipped duplicate document: {doc_name}")
+                    continue
+                seen_docs.setdefault(org_uuid, set()).add(doc_name_lower)
+
                 # Get folder path and HTML file from folder map
                 content = ""
                 path = "/"
@@ -1051,6 +1089,19 @@ class EntityImporter:
                     logger.debug(
                         f"Document {itglue_id} not found in folder map, using root path"
                     )
+
+                # Check for empty content (before processing)
+                if _is_content_empty(content):
+                    self.reporter.warning(
+                        f"Document '{doc_name}' has empty content, skipping"
+                    )
+                    self.reporter.update_progress(skipped=1)
+                    self.state.add_warning(f"Skipped empty document: {doc_name}")
+                    continue
+
+                # Clean HTML and convert to markdown
+                cleaned_html = doc_processor._clean_html(content)
+                content = doc_processor._html_to_markdown(cleaned_html)
 
                 # Map archived to is_enabled
                 archived = doc.get("archived")

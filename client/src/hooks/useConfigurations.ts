@@ -363,15 +363,34 @@ export function useUpdateConfiguration(orgId: string, id: string) {
   });
 }
 
-export function useDeleteConfiguration(orgId: string) {
+export function useDeleteConfiguration(orgId: string, onDeleted?: (id: string) => void) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (id: string) => {
       await api.delete(`/api/organizations/${orgId}/configurations/${id}`);
+      return id;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["configurations", orgId] });
+    onSuccess: (_data, id) => {
+      // Navigate FIRST (if callback provided) to unmount detail page before cache removal
+      // This prevents the detail page query from refetching a deleted resource
+      onDeleted?.(id);
+
+      // Remove detail query from cache
+      queryClient.removeQueries({ queryKey: ["configurations", orgId, id] });
+      // Invalidate ONLY list queries (3rd element is object), not detail queries (3rd element is string)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            key[0] === "configurations" &&
+            key[1] === orgId &&
+            (key.length === 2 || typeof key[2] === "object")
+          );
+        },
+      });
+      // Invalidate sidebar to update counts
+      queryClient.invalidateQueries({ queryKey: ["sidebar", orgId] });
     },
   });
 }

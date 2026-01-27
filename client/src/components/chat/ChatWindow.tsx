@@ -1,6 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MessageSquare, Loader2, AlertCircle, Send, FileText, Boxes } from "lucide-react";
+import { useDocument } from "@/hooks/useDocuments";
+import { useCustomAsset, useCustomAssetType } from "@/hooks/useCustomAssets";
+import { getDisplayFieldKey, getDisplayValue } from "@/lib/custom-asset-utils";
 import { FloatingWindow } from "@/components/ui/floating-window";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +27,7 @@ interface ChatWindowProps {
   initialMessage?: string;
   currentEntityId?: string;
   currentEntityType?: "document" | "custom_asset";
+  currentEntityTypeId?: string; // For custom assets, the asset type ID
 }
 
 type ChatScope = "org" | "global";
@@ -167,10 +171,38 @@ export function ChatWindow({
   initialMessage,
   currentEntityId,
   currentEntityType,
+  currentEntityTypeId,
 }: ChatWindowProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentOrg } = useOrganizationStore();
+
+  // Fetch entity name for context indicator
+  const { data: documentData } = useDocument(
+    currentOrg?.id || "",
+    currentEntityId || "",
+    { enabled: !!currentOrg?.id && !!currentEntityId && currentEntityType === "document" }
+  );
+
+  const { data: customAssetData } = useCustomAsset(
+    currentOrg?.id || "",
+    currentEntityTypeId || "",
+    currentEntityId || "",
+  );
+
+  const { data: assetTypeData } = useCustomAssetType(currentEntityTypeId || "");
+
+  // Compute the entity name to display
+  const currentEntityName = useMemo(() => {
+    if (currentEntityType === "document" && documentData) {
+      return documentData.name;
+    }
+    if (currentEntityType === "custom_asset" && customAssetData && assetTypeData) {
+      const displayFieldKey = getDisplayFieldKey(assetTypeData);
+      return getDisplayValue(customAssetData, displayFieldKey);
+    }
+    return undefined;
+  }, [currentEntityType, documentData, customAssetData, assetTypeData]);
 
   // Check if we're on global view
   const isGlobalView = location.pathname.startsWith("/global");
@@ -315,14 +347,21 @@ export function ChatWindow({
           <div className="px-3 py-2 bg-primary/5 border-b border-border/50">
             <div className="flex items-center gap-2 text-xs">
               {currentEntityType === "document" ? (
-                <FileText className="h-3 w-3 text-primary" />
+                <FileText className="h-3 w-3 text-primary shrink-0" />
               ) : (
-                <Boxes className="h-3 w-3 text-primary" />
+                <Boxes className="h-3 w-3 text-primary shrink-0" />
               )}
-              <span className="text-muted-foreground">
-                {currentEntityType === "document"
-                  ? "Viewing current document"
-                  : "Viewing current asset"}
+              <span className="text-muted-foreground truncate">
+                {currentEntityName ? (
+                  <>
+                    <span className="font-medium text-foreground">{currentEntityName}</span>
+                    <span className="ml-1">in context</span>
+                  </>
+                ) : (
+                  currentEntityType === "document"
+                    ? "Loading document..."
+                    : "Loading asset..."
+                )}
               </span>
             </div>
           </div>

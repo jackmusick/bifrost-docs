@@ -497,4 +497,9 @@ async def batch_toggle_configurations(
         },
     )
 
+    # Update search index for each affected configuration
+    # The worker will index if enabled, remove from index if disabled
+    for config_id in config_ids:
+        await index_entity_for_search(db, "configuration", config_id, org_id)
+
     return BatchToggleResponse(updated_count=result.rowcount)

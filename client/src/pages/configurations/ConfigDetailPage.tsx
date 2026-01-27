@@ -66,7 +66,10 @@ export function ConfigDetailPage() {
   const { data: types = [] } = useConfigurationTypes();
   const { data: statuses = [] } = useConfigurationStatuses();
   const updateConfiguration = useUpdateConfiguration(orgId!, id!);
-  const deleteConfiguration = useDeleteConfiguration(orgId!);
+  const deleteConfiguration = useDeleteConfiguration(orgId!, () => {
+    // Navigate in onSuccess callback BEFORE cache removal to prevent stale query refetch
+    navigate(`/org/${orgId}/configurations`);
+  });
 
   // Memoize initial data before any early returns
   const initialData = useMemo((): ConfigFormValues => {
@@ -140,7 +143,7 @@ export function ConfigDetailPage() {
     try {
       await deleteConfiguration.mutateAsync(id);
       toast.success("Configuration deleted successfully");
-      navigate(`/org/${orgId}/configurations`);
+      // Navigation already happened in onSuccess callback
     } catch {
       toast.error("Failed to delete configuration");
     }

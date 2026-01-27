@@ -687,4 +687,9 @@ async def batch_toggle_custom_assets(
         },
     )
 
+    # Update search index for each affected custom asset
+    # The worker will index if enabled, remove from index if disabled
+    for asset_id in asset_ids:
+        await index_entity_for_search(db, "custom_asset", asset_id, org_id)
+
     return BatchToggleResponse(updated_count=result.rowcount)

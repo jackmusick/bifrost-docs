@@ -146,7 +146,10 @@ export function CustomAssetDetailPage() {
   const { data: asset, isLoading: assetLoading } = useCustomAsset(orgId!, typeId!, id!);
   const revealQuery = useRevealCustomAsset(orgId!, typeId!, id!);
   const updateAsset = useUpdateCustomAsset(orgId!, typeId!, id!);
-  const deleteAsset = useDeleteCustomAsset(orgId!, typeId!);
+  const deleteAsset = useDeleteCustomAsset(orgId!, typeId!, () => {
+    // Navigate in onSuccess callback BEFORE cache removal to prevent stale query refetch
+    navigate(`/org/${orgId}/assets/${typeId}`);
+  });
 
   const isLoading = typeLoading || assetLoading;
 
@@ -258,7 +261,7 @@ export function CustomAssetDetailPage() {
     try {
       await deleteAsset.mutateAsync(id);
       toast.success("Asset deleted successfully");
-      navigate(`/org/${orgId}/assets/${typeId}`);
+      // Navigation already happened in onSuccess callback
     } catch {
       toast.error("Failed to delete asset");
     }

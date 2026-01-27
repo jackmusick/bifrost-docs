@@ -26,6 +26,8 @@ from src.models.enums import AuditAction
 from src.models.orm.document import Document
 from src.repositories.document import DocumentRepository
 from src.services.audit_service import get_audit_service
+from src.services.document_mutations import DocumentMutationService
+from src.services.llm import get_completions_config, get_llm_client
 from src.services.search_indexing import index_entity_for_search, remove_entity_from_search
 
 
@@ -51,6 +53,14 @@ class BatchPathUpdateResponse(BaseModel):
 
     updated_count: int
     conflicts: list[str] = []  # Document names that would conflict
+
+
+class CleanDocumentResponse(BaseModel):
+    """Response for document cleaning operation."""
+
+    cleaned_content: str
+    summary: str
+    suggested_name: str | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -324,6 +334,72 @@ async def get_document_preview(
     }
 
 
+@router.post("/{doc_id}/clean", response_model=CleanDocumentResponse)
+async def clean_document(
+    org_id: UUID,
+    doc_id: UUID,
+    current_user: RequireContributor,
+    db: DbSession,
+) -> CleanDocumentResponse:
+    """
+    Clean and restructure a document using AI.
+
+    Uses the Diataxis framework to clean, restructure, and improve the document.
+    Returns the cleaned content without modifying the original document.
+
+    Args:
+        org_id: Organization UUID
+        doc_id: Document UUID
+        current_user: Current authenticated user (requires Contributor role)
+        db: Database session
+
+    Returns:
+        Cleaned content and summary of changes
+
+    Raises:
+        HTTPException: If document not found
+    """
+    doc_repo = DocumentRepository(db)
+    doc = await doc_repo.get_by_id_and_org(doc_id, org_id)
+
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    # Create service and generate cleaned content
+    config = await get_completions_config(db)
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLM is not configured",
+        )
+    llm_client = get_llm_client(config)
+    mutation_service = DocumentMutationService(llm_client)
+
+    cleaned_content, summary, suggested_name = await mutation_service.generate_cleaned_content(
+        original_content=doc.content or "",
+        document_name=doc.name,
+        user_instruction="clean this up",
+    )
+
+    logger.info(
+        f"Document cleaned: {doc.name}",
+        extra={
+            "doc_id": str(doc.id),
+            "org_id": str(org_id),
+            "user_id": str(current_user.user_id),
+        },
+    )
+
+    return CleanDocumentResponse(
+        cleaned_content=cleaned_content,
+        summary=summary,
+        suggested_name=suggested_name,
+    )
+
+
 @router.put("/{doc_id}", response_model=DocumentPublic)
 async def update_document(
     org_id: UUID,
@@ -502,6 +578,11 @@ async def batch_toggle_documents(
             "updated_count": result.rowcount,
         },
     )
+
+    # Update search index for each affected document
+    # The worker will index if enabled, remove from index if disabled
+    for doc_id in doc_ids:
+        await index_entity_for_search(db, "document", doc_id, org_id)
 
     return BatchToggleResponse(updated_count=result.rowcount)
 

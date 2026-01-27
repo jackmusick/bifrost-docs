@@ -94,6 +94,25 @@ class FileStorageService:
         content_type, _ = mimetypes.guess_type(filename)
         return content_type or "application/octet-stream"
 
+    def _rewrite_url_for_public(self, url: str) -> str:
+        """
+        Rewrite internal S3 URL to use public endpoint.
+
+        When S3/MinIO runs in Docker, presigned URLs contain internal hostnames
+        (e.g., 'minio:9000') that browsers can't access. This rewrites them to
+        use the configured public endpoint.
+
+        Args:
+            url: Presigned URL with internal endpoint
+
+        Returns:
+            URL with public endpoint substituted
+        """
+        public_endpoint = self.settings.s3_public_endpoint
+        if not public_endpoint:
+            return url
+        return url.replace(self.settings.s3_endpoint, public_endpoint, 1)
+
     def generate_s3_key(
         self,
         organization_id: UUID,
@@ -149,7 +168,7 @@ class FileStorageService:
                 },
                 ExpiresIn=expires_in,
             )
-        return url
+        return self._rewrite_url_for_public(url)
 
     async def generate_download_url(
         self,
@@ -186,7 +205,7 @@ class FileStorageService:
                 Params=params,
                 ExpiresIn=expires_in,
             )
-        return url
+        return self._rewrite_url_for_public(url)
 
     async def delete_file(self, s3_key: str) -> bool:
         """

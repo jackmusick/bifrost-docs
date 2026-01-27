@@ -267,8 +267,8 @@ export function AssetTypeForm({
                 <FormItem>
                   <FormLabel>Display Field</FormLabel>
                   <Select
-                    value={field.value || ""}
-                    onValueChange={(v) => field.onChange(v || null)}
+                    value={field.value || "__auto__"}
+                    onValueChange={(v) => field.onChange(v === "__auto__" ? null : v)}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -276,7 +276,7 @@ export function AssetTypeForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Auto-detect (first text field)</SelectItem>
+                      <SelectItem value="__auto__">Auto-detect (first text field)</SelectItem>
                       {getDisplayFieldOptions().map((opt) => (
                         <SelectItem key={opt.key} value={opt.key}>
                           {opt.name}

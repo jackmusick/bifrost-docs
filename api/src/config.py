@@ -183,6 +183,12 @@ class Settings(BaseSettings):
         description="S3-compatible endpoint URL (MinIO in development)",
     )
 
+    s3_public_endpoint: str | None = Field(
+        default=None,
+        description="Public S3 endpoint for presigned URLs (defaults to s3_endpoint if not set). "
+        "Use this when S3/MinIO is behind a proxy or in Docker.",
+    )
+
     s3_access_key: str | None = Field(
         default=None, description="S3 access key (required for S3 operations)"
     )

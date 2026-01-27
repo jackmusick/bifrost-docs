@@ -390,17 +390,22 @@ class EmbeddingsService:
         query: str,
         org_ids: list[UUID],
         limit: int = 20,
-        show_disabled: bool = False,
+        show_disabled: bool = False,  # kept for API compatibility but ignored - index only has enabled entities
     ) -> list[SearchResult]:
         """
         Perform semantic search across organizations.
+
+        Note: The show_disabled parameter is kept for API compatibility but is
+        effectively ignored. The embedding index only contains enabled entities,
+        so all results are from enabled entities. Disabled entities are removed
+        from the index when they are disabled.
 
         Args:
             db: Database session
             query: Search query text
             org_ids: List of organization IDs to search within
             limit: Maximum number of results
-            show_disabled: Include disabled entities in results (default: False)
+            show_disabled: Kept for API compatibility (ignored - index only has enabled entities)
 
         Returns:
             List of search results ordered by relevance
@@ -427,7 +432,8 @@ class EmbeddingsService:
         # Build the query with cosine distance
         distance_expr = EmbeddingIndex.embedding.cosine_distance(query_embedding)
 
-        # Build base query
+        # Build base query - no need to filter by is_enabled since the index
+        # only contains enabled entities (disabled entities are removed from index)
         stmt = (
             select(
                 EmbeddingIndex,
@@ -438,33 +444,13 @@ class EmbeddingsService:
             .where(EmbeddingIndex.organization_id.in_(org_ids))
         )
 
-        # Filter out disabled entities if show_disabled is False
-        # This requires joining with each entity type table
-        if not show_disabled:
-            # Build OR conditions for each entity type to filter by is_enabled
-            # We use a CASE approach: for each entity_type, join with its table
-            # This is complex, so we'll filter after fetching for semantic search
-            # For now, fetch all and filter in Python (not ideal but works)
-            # TODO: Optimize with proper joins if performance becomes an issue
-            pass
-
         stmt = stmt.order_by(distance_expr).limit(limit)
 
         result = await db.execute(stmt)
         rows = result.all()
 
-        # Filter out disabled entities if show_disabled is False
-        if not show_disabled:
-            filtered_rows = []
-            for row in rows:
-                index: EmbeddingIndex = row[0]
-                # Check if the entity is enabled
-                is_enabled = await self._check_entity_enabled(db, index.entity_type, index.entity_id)
-                if is_enabled:
-                    filtered_rows.append(row)
-            rows = filtered_rows
-
         # Convert to SearchResult objects
+        # All results are from enabled entities since the index only contains enabled entities
         results: list[SearchResult] = []
         for row in rows:
             index: EmbeddingIndex = row[0]
@@ -473,9 +459,6 @@ class EmbeddingsService:
 
             # Get entity name by fetching the entity
             entity_name = await self._get_entity_name(db, index.entity_type, index.entity_id)
-
-            # Get entity enabled status
-            is_enabled = await self._check_entity_enabled(db, index.entity_type, index.entity_id)
 
             # Create snippet from searchable text (first 200 chars)
             snippet = index.searchable_text[:200]
@@ -491,7 +474,7 @@ class EmbeddingsService:
                     name=entity_name or "Unknown",
                     snippet=snippet,
                     score=max(0.0, min(1.0, score)),  # Clamp to 0-1
-                    is_enabled=is_enabled,
+                    is_enabled=True,  # All items in index are enabled
                 )
             )
 

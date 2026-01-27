@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { FileText, Pencil, Trash2, Check } from "lucide-react";
+import { FileText, Pencil, Trash2, Check, Sparkles } from "lucide-react";
 import { formatRelativeTime } from "@/lib/date-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import {
   useCreateDocument,
   useUpdateDocument,
   useDeleteDocument,
+  useCleanDocument,
 } from "@/hooks/useDocuments";
 import { toast } from "sonner";
 
@@ -57,7 +58,11 @@ export function DocumentDetailPage() {
   });
   const createDocument = useCreateDocument(orgId!);
   const updateDocument = useUpdateDocument(orgId!, id!);
-  const deleteDocument = useDeleteDocument(orgId!);
+  const deleteDocument = useDeleteDocument(orgId!, () => {
+    // Navigate in onSuccess callback BEFORE cache removal to prevent stale query refetch
+    navigate(`/org/${orgId}/documents`);
+  });
+  const cleanDocument = useCleanDocument(orgId!, id!);
 
   // Determine display content early for hook - must be before any early returns
   const displayContent = editState?.content ?? document?.content ?? "";
@@ -124,7 +129,7 @@ export function DocumentDetailPage() {
     try {
       await deleteDocument.mutateAsync(id);
       toast.success("Document deleted successfully");
-      navigate(`/org/${orgId}/documents`);
+      // Navigation already happened in onSuccess callback
     } catch {
       toast.error("Failed to delete document");
     }
@@ -136,6 +141,21 @@ export function DocumentDetailPage() {
       toast.success(checked ? "Document enabled" : "Document disabled");
     } catch {
       toast.error("Failed to update document");
+    }
+  };
+
+  const handleClean = async () => {
+    try {
+      const result = await cleanDocument.mutateAsync();
+      // Enter edit mode with cleaned content and suggested name
+      setEditState({
+        name: result.suggested_name ?? document?.name ?? "",
+        path: document?.path ?? "/",
+        content: result.cleaned_content,
+      });
+      toast.success(`Document cleaned: ${result.summary}`);
+    } catch {
+      toast.error("Failed to clean document");
     }
   };
 
@@ -181,13 +201,13 @@ export function DocumentDetailPage() {
       <div className="flex-1 overflow-auto">
         {/* Top bar with actions */}
         <div className="flex items-center justify-between px-6 py-3 border-b">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1 mr-4">
             {isEditing ? (
               <Input
                 value={editState.name}
                 onChange={(e) => setEditState({ ...editState, name: e.target.value })}
                 placeholder="Document name"
-                className="text-lg font-semibold h-8 max-w-md"
+                className="text-lg font-semibold h-8 w-full"
                 autoFocus={isNewDocument}
               />
             ) : (
@@ -235,6 +255,17 @@ export function DocumentDetailPage() {
                       {document?.is_enabled ? "Enabled" : "Disabled"}
                     </span>
                   </div>
+                )}
+                {!isNewDocument && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClean}
+                    disabled={cleanDocument.isPending}
+                  >
+                    <Sparkles className="mr-1 h-3.5 w-3.5" />
+                    {cleanDocument.isPending ? "Cleaning..." : "Clean"}
+                  </Button>
                 )}
                 <Button
                   variant="outline"

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -650,6 +651,104 @@ def preview(
             border_style="green",
         )
     )
+
+
+@app.command("test-doc")
+def test_document(
+    export_path: Annotated[Path, typer.Argument(help="Path to IT Glue export directory")],
+    doc_id: Annotated[str, typer.Argument(help="Document ID to test (the numeric ID from DOC-xxx-{ID})")],
+    output: Annotated[Path | None, typer.Option("--output", "-o", help="Output file path (prints to stdout if not specified)")] = None,
+) -> None:
+    """Test processing a single document without importing.
+
+    Processes the document HTML, applies all transformations (step sections,
+    Word formatting cleanup, etc.), converts to markdown, and outputs
+    the result without calling any APIs.
+
+    Example:
+        itglue-migrate test-doc /path/to/export 9848386 -o /tmp/test.md
+    """
+    from itglue_migrate.document_processor import DocumentProcessor
+
+    # Find the document folder
+    documents_path = export_path / "documents"
+    if not documents_path.exists():
+        console.print(f"[red]Documents directory not found: {documents_path}[/red]")
+        raise typer.Exit(1)
+
+    doc_folder = None
+
+    # Search for DOC-*-{doc_id} folder pattern
+    for folder in documents_path.rglob("DOC-*"):
+        if not folder.is_dir():
+            continue
+        # Pattern: DOC-{org_id}-{doc_id} {name}
+        match = re.match(r"^DOC-\d+-(\d+)\s", folder.name)
+        if match and match.group(1) == doc_id:
+            doc_folder = folder
+            break
+
+    if not doc_folder:
+        console.print(f"[red]Document folder not found for ID {doc_id}[/red]")
+        console.print("[yellow]Looking for folders matching: DOC-*-{doc_id} *[/yellow]")
+        raise typer.Exit(1)
+
+    # Find HTML file
+    html_files = list(doc_folder.glob("*.html"))
+    if not html_files:
+        html_files = list(doc_folder.glob("*.htm"))
+
+    if not html_files:
+        console.print(f"[red]No HTML file found in {doc_folder}[/red]")
+        raise typer.Exit(1)
+
+    # Prefer index.html if it exists
+    html_file = html_files[0]
+    for f in html_files:
+        if f.name.lower() in ("index.html", "index.htm"):
+            html_file = f
+            break
+
+    console.print(f"[blue]Processing:[/blue] {html_file}")
+    console.print(f"[blue]Document folder:[/blue] {doc_folder.name}")
+
+    # Read the HTML content
+    try:
+        html = html_file.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        try:
+            html = html_file.read_text(encoding="latin-1")
+        except Exception as e:
+            console.print(f"[red]Failed to read HTML file: {e}[/red]")
+            raise typer.Exit(1)
+
+    console.print(f"[dim]Input HTML size: {len(html)} bytes[/dim]")
+
+    # Create a mock client class (we don't need actual API access)
+    class MockClient:
+        pass
+
+    processor = DocumentProcessor(MockClient(), export_path)  # type: ignore
+
+    # Apply HTML cleaning
+    cleaned = processor._clean_html(html)
+
+    # Convert to markdown
+    markdown = processor._html_to_markdown(cleaned)
+
+    console.print(f"[dim]Output markdown size: {len(markdown)} bytes[/dim]")
+
+    # Check if empty
+    if not markdown.strip():
+        console.print("[yellow]Warning: Document content is empty after processing[/yellow]")
+
+    # Output
+    if output:
+        output.write_text(markdown)
+        console.print(f"[green]Wrote output to {output}[/green]")
+    else:
+        console.print("\n[bold]--- Processed Content ---[/bold]\n")
+        console.print(markdown)
 
 
 async def _verify_api_connectivity(
@@ -1404,6 +1503,7 @@ async def _migrate_documents(
     target_org_names: set[str] | None,
     doc_processor: DocumentProcessor | None = None,
     export_path: Path | None = None,
+    skip_attachments: bool = False,
 ) -> None:
     """Migrate documents.
 
@@ -1431,6 +1531,9 @@ async def _migrate_documents(
     documents_path = export_path / "documents" if export_path else None
     folder_map = _build_document_folder_map(documents_path) if documents_path else {}
 
+    # Track seen documents for duplicate detection (org_uuid -> set of lowercase names)
+    seen_docs: dict[str, set[str]] = {}
+
     for doc in parsed_docs:
         itglue_id = str(doc.get("id", ""))
         name = doc.get("name", "")
@@ -1449,6 +1552,15 @@ async def _migrate_documents(
             state.mark_failed(Phase.DOCUMENTS, itglue_id, f"Organization {org_itglue_id} not migrated")
             reporter.update_progress(failed=1)
             continue
+
+        # Check for duplicate document names within the same org
+        name_lower = name.lower()
+        if org_uuid in seen_docs and name_lower in seen_docs[org_uuid]:
+            reporter.warning(f"Duplicate document '{name}' in organization, skipping")
+            reporter.update_progress(skipped=1)
+            state.add_warning(f"Skipped duplicate document: {name}")
+            continue
+        seen_docs.setdefault(org_uuid, set()).add(name_lower)
 
         try:
             if dry_run:
@@ -1491,6 +1603,13 @@ async def _migrate_documents(
                         reporter.warning(f"Failed to process document HTML for '{name}': {e}")
                         content = ""
 
+                # Check for empty content after processing
+                if not content or not content.strip():
+                    reporter.warning(f"Document '{name}' has empty content, skipping")
+                    reporter.update_progress(skipped=1)
+                    state.add_warning(f"Skipped empty document: {name}")
+                    continue
+
                 # Compute is_enabled from archived field
                 archived = doc.get("archived")
                 is_enabled = map_archived_to_is_enabled(archived)
@@ -1509,7 +1628,7 @@ async def _migrate_documents(
                 state.mark_completed(Phase.DOCUMENTS, itglue_id)
 
                 # Upload attachments for this document
-                if doc_processor and export_path and new_uuid:
+                if doc_processor and export_path and new_uuid and not skip_attachments:
                     try:
                         attachment_count = await doc_processor.upload_entity_attachments(
                             entity_type="documents",
@@ -1752,6 +1871,7 @@ async def _execute_migration(
     target_org: str | None,
     export_path: Path,
     state_file: Path | None,
+    skip_attachments: bool = False,
 ) -> int:
     """Execute the migration.
 
@@ -1824,8 +1944,11 @@ async def _execute_migration(
         target_org_names = {target_org}
 
     async with BifrostDocsClient(base_url=api_url, api_key=token) as client:
-        # Create document processor for attachment uploads
+        # Create document processor for HTML processing (always needed)
         doc_processor = DocumentProcessor(client=client, export_path=export_path)
+
+        # For attachment uploads, use None if skip_attachments is True
+        attachment_export_path = None if skip_attachments else export_path
 
         # Phase 1: Organizations
         await _migrate_organizations(
@@ -1838,7 +1961,7 @@ async def _execute_migration(
         await _migrate_locations(
             client, parsed_locations, state, reporter, dry_run, target_org_names,
             doc_processor=doc_processor,
-            export_path=export_path,
+            export_path=attachment_export_path,
         )
         if state_file:
             state.save(state_file)
@@ -1854,7 +1977,7 @@ async def _execute_migration(
         await _migrate_configurations(
             client, parsed_configs, state, reporter, dry_run, target_org_names,
             doc_processor=doc_processor,
-            export_path=export_path,
+            export_path=attachment_export_path,
         )
         if state_file:
             state.save(state_file)
@@ -1870,7 +1993,7 @@ async def _execute_migration(
         await _migrate_custom_assets(
             client, parsed_custom_assets, custom_asset_schemas, state, reporter, dry_run, target_org_names,
             doc_processor=doc_processor,
-            export_path=export_path,
+            export_path=attachment_export_path,
         )
         if state_file:
             state.save(state_file)
@@ -1880,6 +2003,7 @@ async def _execute_migration(
             client, parsed_docs, state, reporter, dry_run, target_org_names,
             doc_processor=doc_processor,
             export_path=export_path,
+            skip_attachments=skip_attachments,
         )
         if state_file:
             state.save(state_file)
@@ -1888,7 +2012,7 @@ async def _execute_migration(
         await _migrate_passwords(
             client, parsed_passwords, state, reporter, dry_run, target_org_names,
             doc_processor=doc_processor,
-            export_path=export_path,
+            export_path=attachment_export_path,
         )
         if state_file:
             state.save(state_file)
@@ -2054,6 +2178,13 @@ def run(
             "--verbose",
             "-v",
             help="Show detailed progress",
+        ),
+    ] = False,
+    skip_attachments: Annotated[
+        bool,
+        typer.Option(
+            "--skip-attachments",
+            help="Skip attachment uploads for faster testing",
         ),
     ] = False,
 ) -> None:
@@ -2235,6 +2366,7 @@ def run(
                 target_org=org,
                 export_path=export_path,
                 state_file=state_file,
+                skip_attachments=skip_attachments,
             )
         )
 
